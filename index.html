@@ -417,7 +417,8 @@ if(FIREBASE_READY){
 
     els.board.innerHTML = '<div style="padding:40px;color:var(--ink-soft);width:100%;text-align:center;">מתחבר…</div>';
     try{
-      await fbAuthReady;
+      const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error('תם הזמן להתחברות (בדקו חיבור אינטרנט / הגדרות Firebase)')), 8000));
+      await Promise.race([fbAuthReady, timeout]);
       unsubscribeSnapshot = fbDb.collection('schedules').doc(key).onSnapshot(snap=>{
         const incomingStr = snap.exists ? JSON.stringify(snap.data()) : null;
         if(incomingStr === lastSavedStr) return; // our own write echoing back — ignore
@@ -426,7 +427,9 @@ if(FIREBASE_READY){
         render();
       }, err=>{
         console.error(err);
-        showToast('שגיאת סנכרון: '+err.message);
+        day = emptyDay(key);
+        render();
+        showToast('שגיאת סנכרון (בדקו שה-Rules פורסמו ב-Firestore): '+err.message);
       });
     }catch(err){
       console.error(err);
