@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>לו״ז ותדירות יומי — Imacs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&family=Heebo:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#152238;
+    --ink-soft:#4a5670;
+    --paper:#eef1f4;
+    --card:#ffffff;
+    --line:#d7dde6;
+    --teal:#2f8f82;
+    --teal-dark:#22685f;
+    --amber:#c98a2e;
+    --amber-bg:#fbf1de;
+    --red:#c14545;
+    --red-bg:#fbe9e9;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:'Heebo',sans-serif;}
+  h1,h2,h3,.display{font-family:'Rubik',sans-serif;}
+
+  .topbar{
+    position:sticky;top:0;z-index:20;
+    background:var(--ink);color:#fff;
+    padding:14px 18px;
+    display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+  }
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand .tab{
+    background:var(--teal);color:#fff;font-family:'Rubik',sans-serif;font-weight:800;
+    font-size:13px;padding:4px 10px;border-radius:4px;letter-spacing:.5px;
+  }
+  .brand h1{font-size:17px;margin:0;font-weight:700;}
+  .datectrl{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border-radius:8px;padding:4px 6px;}
+  .datectrl button{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;}
+  .datectrl button:hover{background:rgba(255,255,255,.15);}
+  .datectrl .datelabel{font-weight:600;font-size:14px;min-width:150px;text-align:center;}
+
+  .actions{display:flex;gap:8px;flex-wrap:wrap;}
+  .btn{
+    font-family:'Heebo',sans-serif;font-weight:500;font-size:14px;
+    border:none;border-radius:8px;padding:9px 14px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;transition:.15s;
+  }
+  .btn-primary{background:var(--teal);color:#fff;}
+  .btn-primary:hover{background:var(--teal-dark);}
+  .btn-ghost{background:rgba(255,255,255,.1);color:#fff;}
+  .btn-ghost:hover{background:rgba(255,255,255,.2);}
+  .btn-outline{background:#fff;color:var(--ink);border:1px solid var(--line);}
+  .btn-outline:hover{background:var(--paper);}
+  .btn-sm{padding:5px 9px;font-size:12.5px;border-radius:6px;}
+  .btn:disabled{opacity:.5;cursor:default;}
+
+  .status-strip{
+    padding:10px 18px;background:#fff;border-bottom:1px solid var(--line);
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13.5px;
+  }
+  .status-strip .pill{
+    padding:4px 10px;border-radius:20px;font-weight:600;font-size:12.5px;
+    display:inline-flex;align-items:center;gap:5px;
+  }
+  .pill.ok{background:#e4f3ef;color:var(--teal-dark);}
+  .pill.pending{background:var(--amber-bg);color:var(--amber);}
+  .missing-names{color:var(--red);font-weight:600;}
+
+  .board{
+    padding:16px;
+    display:flex;gap:14px;overflow-x:auto;
+    align-items:flex-start;
+    min-height:60vh;
+  }
+  .empty-state{
+    margin:60px auto;text-align:center;max-width:420px;color:var(--ink-soft);
+  }
+  .empty-state h2{color:var(--ink);margin-bottom:8px;}
+  .empty-state .btn{margin-top:16px;}
+
+  .column{
+    background:var(--card);
+    border-radius:10px;
+    min-width:250px;max-width:270px;flex:0 0 auto;
+    box-shadow:0 1px 3px rgba(21,34,56,.08), 0 1px 2px rgba(21,34,56,.04);
+    border:1px solid var(--line);
+    display:flex;flex-direction:column;
+    overflow:hidden;
+  }
+  .column.done{border-color:var(--teal);box-shadow:0 0 0 2px rgba(47,143,130,.25);}
+  .col-tab{
+    background:var(--ink);color:#fff;padding:10px 12px;
+    display:flex;align-items:center;justify-content:space-between;gap:6px;
+  }
+  .column.done .col-tab{background:var(--teal-dark);}
+  .col-tab input{
+    background:transparent;border:none;color:#fff;font-family:'Rubik',sans-serif;
+    font-weight:700;font-size:14.5px;width:100%;padding:2px 0;
+  }
+  .col-tab input:focus{outline:none;border-bottom:1px solid rgba(255,255,255,.5);}
+  .col-tab .del-col{background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-size:15px;padding:2px 4px;}
+  .col-tab .del-col:hover{color:#fff;}
+
+  .patients{padding:8px;display:flex;flex-direction:column;gap:8px;}
+  .patient{
+    background:var(--paper);border-radius:8px;padding:8px 9px;
+    border:1px solid transparent;
+  }
+  .patient-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+  .patient-head input.pname{
+    flex:1;border:none;background:transparent;font-weight:600;font-size:13.5px;
+    color:var(--ink);padding:2px 0;
+  }
+  .patient-head input.pname:focus{outline:none;border-bottom:1px dashed var(--line);}
+  .del-p{background:none;border:none;color:#a7afbd;cursor:pointer;font-size:14px;line-height:1;padding:2px;}
+  .del-p:hover{color:var(--red);}
+  .move-wrap{display:flex;flex-direction:column;gap:1px;}
+  .move-btn{
+    background:none;border:1px solid var(--line);border-radius:4px;color:var(--ink-soft);
+    cursor:pointer;font-size:9px;line-height:1;padding:1px 3px;
+  }
+  .move-btn:hover{background:var(--paper);}
+  .move-btn:disabled{opacity:.3;cursor:default;}
+
+  .freq-squares{display:flex;gap:10px;margin-bottom:6px;align-items:flex-start;flex-wrap:wrap;}
+  .freq-col{display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .freq-col-label{font-size:9.5px;color:var(--ink-soft);text-align:center;}
+  .freq-square{
+    width:42px;height:42px;border-radius:50%;border:1px solid var(--line);
+    background:#fff;font-weight:800;font-size:15px;text-align:center;
+    font-family:'Rubik',sans-serif;color:var(--ink);cursor:pointer;
+    -webkit-appearance:none;-moz-appearance:none;appearance:none;
+    text-align-last:center;padding:0;
+  }
+  .freq-square.rec{border:1px dashed var(--ink-soft);color:var(--ink-soft);background:var(--paper);}
+  .note-input.needs-note{border-color:var(--red);background:var(--red-bg);}
+
+  .act-freq-row{display:flex;gap:4px;}
+  .act-freq-btn{
+    width:32px;height:32px;border-radius:50%;border:1px solid var(--line);
+    background:#fff;font-weight:700;font-size:12.5px;cursor:pointer;color:var(--ink-soft);
+    font-family:'Rubik',sans-serif;padding:0;
+  }
+  .act-freq-btn.sel.match{background:var(--teal);color:#fff;border-color:var(--teal);}
+  .act-freq-btn.sel.mismatch{background:var(--red);color:#fff;border-color:var(--red);}
+  .act-freq-btn.sel.neutral{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .act-freq-btn.sel.special{background:#7b4fb0;color:#fff;border-color:#7b4fb0;}
+
+  .pending-row{display:flex;align-items:center;gap:6px;margin-top:8px;}
+  .pending-label{font-size:10.5px;color:var(--ink-soft);}
+  .pending-btns{display:flex;gap:4px;}
+  .pending-btn{
+    width:26px;height:26px;border-radius:6px;border:1px solid var(--line);
+    background:#fff;font-weight:700;font-size:12px;cursor:pointer;color:var(--ink-soft);
+    font-family:'Rubik',sans-serif;padding:0;
+  }
+  .pending-btn.sel{background:var(--amber);color:#fff;border-color:var(--amber);}
+  .pending-btn.sel.force-red{background:var(--red);color:#fff;border-color:var(--red);}
+  .freq-col.act-pending{background:var(--amber-bg);border-radius:8px;padding:4px;}
+  .pending-progress{font-size:11.5px;font-weight:700;color:var(--amber);margin-inline-start:4px;}
+
+  .note-input{
+    width:100%;border:1px solid var(--line);border-radius:5px;padding:4px 6px;
+    font-family:'Heebo',sans-serif;font-size:12px;background:#fff;color:var(--ink);
+  }
+
+  .add-patient{
+    margin:2px 8px 8px;padding:7px;border:1px dashed var(--line);border-radius:7px;
+    background:none;color:var(--ink-soft);font-size:12.5px;cursor:pointer;
+  }
+  .add-patient:hover{background:var(--paper);}
+
+  .col-footer{padding:8px;border-top:1px solid var(--line);}
+  .finish-btn{width:100%;}
+
+  .add-column{
+    min-width:130px;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;
+    border:2px dashed var(--line);border-radius:10px;color:var(--ink-soft);
+    background:none;cursor:pointer;font-size:13px;font-weight:600;min-height:120px;
+  }
+  .add-column:hover{background:#fff;border-color:var(--teal);color:var(--teal-dark);}
+
+  .modal-bg{
+    position:fixed;inset:0;background:rgba(21,34,56,.55);z-index:50;
+    display:flex;align-items:center;justify-content:center;padding:16px;
+  }
+  .modal{background:#fff;border-radius:12px;padding:22px;max-width:380px;width:100%;text-align:center;}
+  .modal h3{margin-top:0;}
+  .spinner{
+    width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--teal);
+    border-radius:50%;margin:14px auto;animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .modal .err{color:var(--red);font-size:13.5px;margin-top:8px;}
+
+  .toast{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:#fff;padding:9px 18px;border-radius:20px;font-size:13.5px;
+    opacity:0;transition:.3s;pointer-events:none;z-index:60;
+  }
+  .toast.show{opacity:1;bottom:26px;}
+
+  .rotate-modal{background:#fff;border-radius:12px;padding:18px;max-width:440px;width:100%;text-align:center;}
+  .rotate-modal h3{margin-top:0;}
+  .rotate-preview-wrap{
+    background:#2b2f36;border-radius:8px;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+    height:320px;margin:12px 0;
+  }
+  .rotate-preview-wrap img{max-width:100%;max-height:100%;transition:transform .2s;}
+  .rotate-controls{display:flex;justify-content:center;gap:10px;margin-bottom:12px;}
+  .rotate-controls button{
+    background:var(--paper);border:1px solid var(--line);border-radius:8px;
+    font-size:20px;padding:8px 14px;cursor:pointer;
+  }
+  .rotate-controls button:hover{background:#e3e8ee;}
+  .rotate-actions{display:flex;gap:8px;justify-content:center;}
+
+  .crop-modal{background:#fff;border-radius:12px;padding:18px;max-width:520px;width:100%;text-align:center;}
+  .crop-modal h3{margin-top:0;font-size:16px;}
+  .crop-modal p.hint{color:var(--ink-soft);font-size:13px;margin-top:-4px;}
+  .crop-wrap{
+    position:relative;overflow:auto;max-height:55vh;
+    background:#2b2f36;border-radius:8px;margin:12px 0;
+    display:flex;justify-content:center;touch-action:none;
+  }
+  .crop-wrap img{display:block;max-width:100%;user-select:none;-webkit-user-drag:none;}
+  .crop-rect{
+    position:absolute;border:2px solid var(--teal);background:rgba(47,143,130,.18);
+    display:none;pointer-events:none;
+  }
+  .crop-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+
+  .choice-modal{background:#fff;border-radius:12px;padding:20px;max-width:380px;width:100%;text-align:center;}
+  .choice-modal h3{margin-top:0;}
+  .choice-modal .btn{width:100%;margin-bottom:8px;}
+
+  .gate-overlay{
+    position:fixed;inset:0;background:var(--ink);z-index:100;
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  }
+  .gate-box{background:#fff;border-radius:14px;padding:28px 24px;max-width:340px;width:100%;text-align:center;}
+  .gate-box .tab{display:inline-block;margin-bottom:10px;}
+  .gate-box h2{margin:6px 0 4px;font-size:18px;}
+  .gate-box input{
+    width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;
+    font-size:15px;text-align:center;margin:14px 0 8px;font-family:'Heebo',sans-serif;
+  }
+  .gate-box .err{color:var(--red);font-size:13px;min-height:18px;}
+
+  /* PRINT — the split-by-column PDF output */
+  .print-sheet{display:none;}
+  @media print{
+    .no-print{display:none !important;}
+    body{background:#fff;}
+    .print-sheet{display:block;}
+    .print-col{page-break-after:always;padding:24px;font-family:'Heebo',sans-serif;}
+    .print-col:last-child{page-break-after:auto;}
+    .print-col h2{font-family:'Rubik',sans-serif;border-bottom:3px solid #152238;padding-bottom:8px;}
+    .print-col table{width:100%;border-collapse:collapse;margin-top:12px;}
+    .print-col th,.print-col td{border:1px solid #ccc;padding:7px 9px;text-align:right;font-size:14px;}
+    .print-col th{background:#f0f0f0;}
+    .print-date{color:#555;font-size:13px;margin-bottom:2px;}
+  }
+
+  @media (max-width:640px){
+    .topbar{padding:10px 12px;}
+    .brand h1{font-size:15px;}
+    .board{padding:10px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar no-print">
+  <div class="brand">
+    <span class="tab">Imacs</span>
+    <h1>לו״ז ותדירות יומי</h1>
+  </div>
+  <div class="datectrl">
+    <button id="prevDay" title="יום קודם">›</button>
+    <span class="datelabel" id="dateLabel">—</span>
+    <button id="nextDay" title="יום הבא">‹</button>
+  </div>
+  <div class="actions">
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;">
+    <input type="file" id="galleryInput" accept="image/*" style="display:none;">
+    <button class="btn btn-ghost" id="cameraBtn">📷 צילום ישיר</button>
+    <button class="btn btn-ghost" id="galleryBtn">🖼️ העלאה מהגלריה</button>
+    <input type="file" id="pdfInput" style="display:none;">
+    <button class="btn btn-ghost" id="pdfBtn">📄 ייבוא מקובץ PDF תדירות</button>
+    <button class="btn btn-primary" id="printBtn">🖨️ הפקת PDF מחולק</button>
+  </div>
+</div>
+
+<div class="status-strip no-print" id="statusStrip"></div>
+
+<div class="board no-print" id="board"></div>
+
+<div class="print-sheet" id="printSheet"></div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.10.1/firebase-app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.10.1/firebase-auth.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.10.1/firebase-firestore.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<script>
+// ============================================================
+// FIREBASE SETUP — fill these in with your own free Firebase project
+// (create at https://console.firebase.google.com, enable "Firestore
+// Database" and "Authentication → Anonymous", then Project settings →
+// your web app → copy the config object below)
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyCIBzinlCMh_T6Saecydfcl4aDD6z8p49s",
+  authDomain: "imacsx-adf6f.firebaseapp.com",
+  projectId: "imacsx-adf6f",
+  storageBucket: "imacsx-adf6f.firebasestorage.app",
+  messagingSenderId: "219583611465",
+  appId: "1:219583611465:web:e4217fe6ec01e47dd93598"
+};
+const FIREBASE_READY = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY_HERE";
+
+let fbAuth=null, fbDb=null, fbAuthReady=null;
+if(FIREBASE_READY){
+  firebase.initializeApp(firebaseConfig);
+  fbAuth = firebase.auth();
+  fbDb = firebase.firestore();
+  fbAuthReady = new Promise((resolve)=>{
+    fbAuth.onAuthStateChanged(user=>{
+      if(user) resolve(user);
+      else fbAuth.signInAnonymously().catch(err=>console.error('Anonymous sign-in failed:', err));
+    });
+  });
+}
+
+(function(){
+  const FREQ_OPTS=[0,1,2,3,4,5];
+  const ACT_FREQ_OPTS=[0,1,2,3,4,'R'];
+  const els={
+    board:document.getElementById('board'),
+    statusStrip:document.getElementById('statusStrip'),
+    dateLabel:document.getElementById('dateLabel'),
+    prevDay:document.getElementById('prevDay'),
+    nextDay:document.getElementById('nextDay'),
+    cameraInput:document.getElementById('cameraInput'),
+    galleryInput:document.getElementById('galleryInput'),
+    cameraBtn:document.getElementById('cameraBtn'),
+    galleryBtn:document.getElementById('galleryBtn'),
+    pdfInput:document.getElementById('pdfInput'),
+    pdfBtn:document.getElementById('pdfBtn'),
+    printBtn:document.getElementById('printBtn'),
+    printSheet:document.getElementById('printSheet'),
+    toast:document.getElementById('toast'),
+  };
+
+  let currentDate = new Date();
+  let day = null; // {date, columns:[{id,therapist,done,patients:[{id,name,freq,note}]}]}
+  let saveTimer = null;
+  let unsubscribeSnapshot = null;
+  let lastSavedStr = null;
+
+  function fmtDateKey(d){
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function fmtDateLabel(d){
+    return d.toLocaleDateString('he-IL',{weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  }
+  function uid(){return Math.random().toString(36).slice(2,9);}
+  function showToast(msg){
+    els.toast.textContent=msg;
+    els.toast.classList.add('show');
+    setTimeout(()=>els.toast.classList.remove('show'),2200);
+  }
+
+  function emptyDay(dateKey){
+    return {date:dateKey, columns:[]};
+  }
+
+  function scheduleSave(){
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(saveDay, 500);
+  }
+
+  async function saveDay(){
+    if(!FIREBASE_READY){
+      showToast('⚠️ Firebase עוד לא מחובר — ערכו את firebaseConfig בקובץ');
+      return;
+    }
+    const dataStr = JSON.stringify(day);
+    lastSavedStr = dataStr;
+    try{
+      await fbAuthReady;
+      await fbDb.collection('schedules').doc(day.date).set(JSON.parse(dataStr));
+    }catch(e){
+      showToast('שגיאה בשמירה: '+(e && e.message ? e.message : String(e)));
+    }
+  }
+
+  async function goTo(date){
+    currentDate = date;
+    els.dateLabel.textContent = fmtDateLabel(currentDate);
+    const key = fmtDateKey(currentDate);
+    if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot=null; }
+
+    if(!FIREBASE_READY){
+      day = emptyDay(key);
+      render();
+      showToast('⚠️ Firebase עוד לא מחובר — ערכו את firebaseConfig בקובץ כדי לאפשר שמירה וסנכרון');
+      return;
+    }
+
+    els.board.innerHTML = '<div style="padding:40px;color:var(--ink-soft);width:100%;text-align:center;">מתחבר…</div>';
+    try{
+      await fbAuthReady;
+      unsubscribeSnapshot = fbDb.collection('schedules').doc(key).onSnapshot(snap=>{
+        const incomingStr = snap.exists ? JSON.stringify(snap.data()) : null;
+        if(incomingStr === lastSavedStr) return; // our own write echoing back — ignore
+        day = snap.exists ? snap.data() : emptyDay(key);
+        lastSavedStr = incomingStr;
+        render();
+      }, err=>{
+        console.error(err);
+        showToast('שגיאת סנכרון: '+err.message);
+      });
+    }catch(err){
+      console.error(err);
+      day = emptyDay(key);
+      render();
+      showToast('שגיאת חיבור ל-Firebase: '+(err && err.message ? err.message : String(err)));
+    }
+  }
+
+  els.prevDay.onclick=()=>{ const d=new Date(currentDate); d.setDate(d.getDate()-1); goTo(d); };
+  els.nextDay.onclick=()=>{ const d=new Date(currentDate); d.setDate(d.getDate()+1); goTo(d); };
+
+  // ---------- Rendering ----------
+  function render(){
+    renderStatusStrip();
+    renderBoard();
+  }
+
+  function renderStatusStrip(){
+    if(!day.columns.length){ els.statusStrip.innerHTML=''; return; }
+    const total = day.columns.length;
+    const doneCols = day.columns.filter(c=>c.done);
+    const missing = day.columns.filter(c=>!c.done).map(c=>c.therapist||'ללא שם');
+    let html = `<span class="pill ok">✔ הושלמו ${doneCols.length}/${total}</span>`;
+    if(missing.length){
+      html += `<span class="pill pending">⏳ ממתינים למילוי</span>`;
+      html += `<span class="missing-names">${missing.join(', ')}</span>`;
+    }
+    els.statusStrip.innerHTML = html;
+  }
+
+  function renderBoard(){
+    if(!day.columns.length){
+      els.board.innerHTML = `
+        <div class="empty-state" style="width:100%;">
+          <h2>אין עדיין לו״ז ליום הזה</h2>
+          <p>העלו תמונה של דף הלו״ז המודפס ואני אזהה אוטומטית את שמות המטפלים והמטופלים — או הוסיפו עמודה ידנית.</p>
+          <button class="btn btn-outline" id="manualAddBtn">➕ הוספת עמודת מטפל ידנית</button>
+        </div>`;
+      document.getElementById('manualAddBtn').onclick=()=>{ addColumn(); render(); };
+      return;
+    }
+    els.board.innerHTML='';
+    day.columns.forEach(col=>els.board.appendChild(renderColumn(col)));
+    const addBtn=document.createElement('button');
+    addBtn.className='add-column';
+    addBtn.textContent='➕ עמודת מטפל';
+    addBtn.onclick=()=>{ addColumn(); render(); };
+    els.board.appendChild(addBtn);
+  }
+
+  function renderColumn(col){
+    const wrap=document.createElement('div');
+    wrap.className='column'+(col.done?' done':'');
+
+    const tab=document.createElement('div');
+    tab.className='col-tab';
+    const nameInput=document.createElement('input');
+    nameInput.value=col.therapist||'';
+    nameInput.placeholder='שם המטפל';
+    nameInput.oninput=()=>{ col.therapist=nameInput.value; scheduleSave(); };
+    const delColBtn=document.createElement('button');
+    delColBtn.className='del-col'; delColBtn.textContent='✕';
+    delColBtn.title='מחיקת עמודה';
+    delColBtn.onclick=()=>{
+      if(confirm('למחוק את העמודה של '+(col.therapist||'המטפל')+'?')){
+        day.columns = day.columns.filter(c=>c.id!==col.id);
+        scheduleSave(); render();
+      }
+    };
+    tab.appendChild(nameInput); tab.appendChild(delColBtn);
+    wrap.appendChild(tab);
+
+    const plist=document.createElement('div');
+    plist.className='patients';
+    col.patients.forEach(p=>plist.appendChild(renderPatient(col,p)));
+    wrap.appendChild(plist);
+
+    const addP=document.createElement('button');
+    addP.className='add-patient';
+    addP.textContent='➕ הוספת מטופל';
+    addP.onclick=()=>{
+      col.patients.push({id:uid(),name:'',freq:null,recommended:2,pending:null,note:''});
+      scheduleSave(); render();
+    };
+    wrap.appendChild(addP);
+
+    const footer=document.createElement('div');
+    footer.className='col-footer';
+    const finishBtn=document.createElement('button');
+    finishBtn.className='btn finish-btn '+(col.done?'btn-outline':'btn-primary');
+    finishBtn.textContent = col.done? '✔ הושלם — ללחיצה לעריכה' : 'סיימתי למלא ✓';
+    finishBtn.onclick=()=>{ col.done=!col.done; scheduleSave(); render(); };
+    footer.appendChild(finishBtn);
+    wrap.appendChild(footer);
+
+    return wrap;
+  }
+
+  function renderPatient(col,p){
+    const box=document.createElement('div');
+    box.className='patient';
+
+    const head=document.createElement('div');
+    head.className='patient-head';
+    const moveWrap=document.createElement('div');
+    moveWrap.className='move-wrap';
+    const idx = col.patients.findIndex(x=>x.id===p.id);
+    const upBtn=document.createElement('button');
+    upBtn.className='move-btn'; upBtn.textContent='▲'; upBtn.title='הזז למעלה';
+    upBtn.disabled = idx===0;
+    upBtn.onclick=()=>{
+      if(idx>0){
+        [col.patients[idx-1], col.patients[idx]] = [col.patients[idx], col.patients[idx-1]];
+        scheduleSave(); render();
+      }
+    };
+    const downBtn=document.createElement('button');
+    downBtn.className='move-btn'; downBtn.textContent='▼'; downBtn.title='הזז למטה';
+    downBtn.disabled = idx===col.patients.length-1;
+    downBtn.onclick=()=>{
+      if(idx<col.patients.length-1){
+        [col.patients[idx+1], col.patients[idx]] = [col.patients[idx], col.patients[idx+1]];
+        scheduleSave(); render();
+      }
+    };
+    moveWrap.appendChild(upBtn); moveWrap.appendChild(downBtn);
+    const nameInput=document.createElement('input');
+    nameInput.className='pname';
+    nameInput.value=p.name||'';
+    nameInput.placeholder='שם המטופל';
+    nameInput.oninput=()=>{ p.name=nameInput.value; scheduleSave(); };
+    const delBtn=document.createElement('button');
+    delBtn.className='del-p'; delBtn.textContent='✕';
+    delBtn.onclick=()=>{
+      col.patients=col.patients.filter(x=>x.id!==p.id);
+      scheduleSave(); render();
+    };
+    head.appendChild(moveWrap); head.appendChild(nameInput); head.appendChild(delBtn);
+    box.appendChild(head);
+
+    const squares=document.createElement('div');
+    squares.className='freq-squares';
+
+    // "Recommended" stays a native scroll-picker square
+    const recCol=document.createElement('div');
+    recCol.className='freq-col';
+    const recLbl=document.createElement('div');
+    recLbl.className='freq-col-label'; recLbl.textContent='מומלץ';
+    const recSel=document.createElement('select');
+    recSel.className='freq-square rec';
+    const noneOpt=document.createElement('option');
+    noneOpt.value=''; noneOpt.textContent='-';
+    recSel.appendChild(noneOpt);
+    FREQ_OPTS.forEach(n=>{
+      const o=document.createElement('option');
+      o.value=n; o.textContent=n;
+      if(p.recommended===n) o.selected=true;
+      recSel.appendChild(o);
+    });
+    if(p.recommended===null || p.recommended===undefined) noneOpt.selected=true;
+    recSel.onchange=()=>{ p.recommended = recSel.value===''? null : Number(recSel.value); scheduleSave(); render(); };
+    recCol.appendChild(recSel); recCol.appendChild(recLbl);
+
+    // "Actual" is a row of tap buttons: 0,1,2,3,4,R
+    const actCol=document.createElement('div');
+    actCol.className='freq-col';
+    const actLbl=document.createElement('div');
+    actLbl.className='freq-col-label'; actLbl.textContent='בפועל';
+    const actRow=document.createElement('div');
+    actRow.className='act-freq-row';
+
+    const comparable = (p.recommended!==null && p.recommended!==undefined && p.freq!==null && p.freq!==undefined);
+    let mismatch=false;
+    if(comparable){ mismatch = (p.freq !== p.recommended); }
+
+    ACT_FREQ_OPTS.forEach(val=>{
+      const b=document.createElement('button');
+      b.className='act-freq-btn';
+      b.textContent=val;
+      const isSel = p.freq===val;
+      if(isSel){
+        b.classList.add('sel');
+        if(val==='R'){ b.classList.add('special'); }
+        else{ b.classList.add(comparable ? (mismatch?'mismatch':'match') : 'neutral'); }
+      }
+      b.onclick=()=>{ p.freq=(p.freq===val? null : val); scheduleSave(); render(); };
+      actRow.appendChild(b);
+    });
+    actCol.appendChild(actRow); actCol.appendChild(actLbl);
+
+    squares.appendChild(recCol);
+    squares.appendChild(actCol);
+    box.appendChild(squares);
+
+    const pendingRow=document.createElement('div');
+    pendingRow.className='pending-row';
+    const pendingLbl=document.createElement('span');
+    pendingLbl.className='pending-label';
+    pendingLbl.textContent='עוד לקבוע השבוע:';
+    const pendingBtns=document.createElement('div');
+    pendingBtns.className='pending-btns';
+    [1,2,3,'*'].forEach(n=>{
+      const b=document.createElement('button');
+      b.className='pending-btn'+(p.pending===n?' sel':'')+(n==='*'?' force-red':'');
+      b.textContent=n;
+      b.title = n==='*' ? 'סימון חריג — מסמן את השורה באדום בדוח' : '';
+      b.onclick=()=>{ p.pending=(p.pending===n? null : n); scheduleSave(); render(); };
+      pendingBtns.appendChild(b);
+    });
+    pendingRow.appendChild(pendingLbl);
+    pendingRow.appendChild(pendingBtns);
+    if(p.pending!==null && p.pending!==undefined && p.pending!=='*'){
+      actCol.classList.add('act-pending');
+      const progress=document.createElement('span');
+      progress.className='pending-progress';
+      progress.textContent = `${p.pending}/${(p.recommended!==null && p.recommended!==undefined)? p.recommended : '-'}`;
+      pendingRow.appendChild(progress);
+    }
+    box.appendChild(pendingRow);
+
+    const note=document.createElement('input');
+    note.className='note-input'+(mismatch?' needs-note':'');
+    note.placeholder = mismatch ? '⚠️ נדרש הסבר על אי ההתאמה' : 'הערה (לא חובה)';
+    note.value=p.note||'';
+    note.oninput=()=>{ p.note=note.value; scheduleSave(); };
+    box.appendChild(note);
+
+    return box;
+  }
+
+  function addColumn(){
+    day.columns.push({id:uid(), therapist:'', done:false, patients:[{id:uid(),name:'',freq:null,recommended:2,pending:null,note:''}]});
+    scheduleSave();
+  }
+
+  // ---------- Photo import via Claude vision ----------
+  let pendingDataUrl=null, pendingMediaType=null, pendingRotation=0, cachedRotatedDataUrl=null;
+
+  els.cameraBtn.onclick=()=>els.cameraInput.click();
+  els.galleryBtn.onclick=()=>els.galleryInput.click();
+  els.cameraInput.onchange=(e)=>handlePickedFile(e, els.cameraInput);
+  els.galleryInput.onchange=(e)=>handlePickedFile(e, els.galleryInput);
+  els.pdfBtn.onclick=()=>els.pdfInput.click();
+  els.pdfInput.onchange=(e)=>handlePickedPdf(e, els.pdfInput);
+
+  if(typeof pdfjsLib !== 'undefined'){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  // Row format (after the header): <phone> <patient name...> <dd/mm/yyyy> <therapist first> <therapist last> [freq 0-5] <HH:MM>
+  const PDF_ROW_RE = /^(\S+)\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\S+)\s+(\S+)\s+(?:(\d)\s+)?(\d{2}:\d{2})$/;
+
+  async function handlePickedPdf(e, inputEl){
+    const file=e.target.files[0];
+    inputEl.value='';
+    if(!file){ showToast('לא נבחר קובץ'); return; }
+    showToast('📄 קובץ נבחר: '+file.name);
+    if(!/\.pdf$/i.test(file.name) && file.type!=='application/pdf'){
+      showModalError('הקובץ שנבחר לא נראה כמו PDF ('+(file.name||'ללא שם')+'). בחרו קובץ PDF.');
+      return;
+    }
+    if(typeof pdfjsLib === 'undefined'){
+      showModalError('ספריית קריאת ה-PDF (pdf.js) לא נטענה. ייתכן שזה חסום כאן בתצוגה המוגנת של הצ\'אט — נסו שוב אחרי שתפרסו את הקובץ לאתר אמיתי (Vercel/Netlify).');
+      return;
+    }
+    showModal();
+    try{
+      const arrayBuffer = await file.arrayBuffer();
+      const lines = await extractPdfLines(arrayBuffer);
+      const columnsMap = new Map(); // therapist -> patients[]
+      let matchedRows=0;
+      lines.forEach(line=>{
+        const trimmed=line.trim();
+        if(!trimmed) return;
+        const m = trimmed.match(PDF_ROW_RE);
+        if(!m) return;
+        matchedRows++;
+        const patientName = m[2].trim();
+        const therapist = (m[4]+' '+m[5]).trim();
+        const freq = m[6]!==undefined ? Number(m[6]) : null;
+        if(!columnsMap.has(therapist)) columnsMap.set(therapist, []);
+        columnsMap.get(therapist).push({name:patientName, recommended:freq});
+      });
+      hideModal();
+      if(matchedRows===0){
+        showModalError('לא הצלחתי לזהות שורות בפורמט המוכר בקובץ הזה. ודאו שזה "דוח תדירות" מאותה התוכנה, או הוסיפו ידנית.');
+        return;
+      }
+      const extractedColumns = Array.from(columnsMap.entries()).map(([therapist,patients])=>({therapist,patients}));
+      if(day.columns.length){
+        showMergeChoice(extractedColumns, null);
+      }else{
+        applyExtractedColumns(extractedColumns, 'merge', null);
+      }
+      showToast(`יובאו ${matchedRows} שורות מהקובץ — התדירות המומלצת נלקחה בדיוק כפי שכתוב בדוח`);
+    }catch(err){
+      console.error(err);
+      hideModal();
+      showModalError('שגיאה בקריאת קובץ ה-PDF: '+(err && err.message ? err.message : String(err)));
+    }
+  }
+
+  async function extractPdfLines(arrayBuffer){
+    const pdf = await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+    const allLines=[];
+    for(let i=1;i<=pdf.numPages;i++){
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const items = content.items;
+      // group text items into physical lines by rounded y-coordinate
+      const rows = new Map();
+      items.forEach(it=>{
+        const y = Math.round(it.transform[5]);
+        let key = y;
+        for(const k of rows.keys()){ if(Math.abs(k-y)<=2){ key=k; break; } }
+        if(!rows.has(key)) rows.set(key, []);
+        rows.get(key).push(it);
+      });
+      const ys = Array.from(rows.keys()).sort((a,b)=>b-a); // top to bottom
+      ys.forEach(y=>{
+        const rowItems = rows.get(y);
+        const asc = rowItems.slice().sort((a,b)=>a.transform[4]-b.transform[4]).map(it=>it.str).join(' ');
+        const desc = rowItems.slice().sort((a,b)=>b.transform[4]-a.transform[4]).map(it=>it.str).join(' ');
+        // pick whichever token order actually matches our expected row shape
+        if(PDF_ROW_RE.test(asc.trim())) allLines.push(asc);
+        else if(PDF_ROW_RE.test(desc.trim())) allLines.push(desc);
+        else allLines.push(asc); // keep as-is; will just be skipped by the parser (e.g. header/footer lines)
+      });
+    }
+    return allLines;
+  }
+
+  async function handlePickedFile(e, inputEl){
+    const file=e.target.files[0];
+    if(!file) return;
+    pendingMediaType = file.type || 'image/jpeg';
+    pendingRotation = 0;
+    cachedRotatedDataUrl = null;
+    pendingDataUrl = await new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res(r.result);
+      r.onerror=()=>rej(new Error('read failed'));
+      r.readAsDataURL(file);
+    });
+    showRotateModal();
+    inputEl.value='';
+  };
+
+  function showRotateModal(){
+    let m=document.getElementById('rotateModal');
+    if(m) m.remove();
+    m=document.createElement('div');
+    m.id='rotateModal';
+    m.className='modal-bg no-print';
+    m.innerHTML=`
+      <div class="rotate-modal">
+        <h3>קודם כל — לוודא שהכתב ניצב וקריא</h3>
+        <div class="rotate-preview-wrap">
+          <img id="rotatePreviewImg" src="${pendingDataUrl}">
+        </div>
+        <div class="rotate-controls">
+          <button id="rotL" title="סיבוב שמאלה">↺</button>
+          <button id="rotR" title="סיבוב ימינה">↻</button>
+        </div>
+        <div class="rotate-actions">
+          <button class="btn btn-outline" id="cancelRotate">ביטול</button>
+          <button class="btn btn-primary" id="confirmRotate">✔ המשך לבחירת אזור</button>
+        </div>
+      </div>`;
+    document.body.appendChild(m);
+    const img=document.getElementById('rotatePreviewImg');
+    img.style.transform=`rotate(${pendingRotation}deg)`;
+    document.getElementById('rotL').onclick=()=>{ pendingRotation=(pendingRotation-90+360)%360; img.style.transform=`rotate(${pendingRotation}deg)`; };
+    document.getElementById('rotR').onclick=()=>{ pendingRotation=(pendingRotation+90)%360; img.style.transform=`rotate(${pendingRotation}deg)`; };
+    document.getElementById('cancelRotate').onclick=()=>m.remove();
+    document.getElementById('confirmRotate').onclick=async ()=>{
+      m.remove();
+      const rotatedBase64 = await rotatePixels(pendingDataUrl, pendingRotation);
+      cachedRotatedDataUrl = 'data:image/png;base64,'+rotatedBase64;
+      showCropModal(cachedRotatedDataUrl);
+    };
+  }
+
+  // Rasterizes the image at the chosen rotation so the bytes sent for
+  // recognition are actually right-side-up (not just CSS-rotated on screen).
+  function rotatePixels(dataUrl, degrees){
+    return new Promise((resolve,reject)=>{
+      const img=new Image();
+      img.onload=()=>{
+        const rad = degrees*Math.PI/180;
+        const swap = (degrees===90||degrees===270);
+        const canvas=document.createElement('canvas');
+        canvas.width = swap? img.height : img.width;
+        canvas.height = swap? img.width : img.height;
+        const ctx=canvas.getContext('2d');
+        ctx.translate(canvas.width/2, canvas.height/2);
+        ctx.rotate(rad);
+        ctx.drawImage(img, -img.width/2, -img.height/2);
+        resolve(canvas.toDataURL('image/png').split(',')[1]);
+      };
+      img.onerror=()=>reject(new Error('image load failed'));
+      img.src=dataUrl;
+    });
+  }
+
+  function showCropModal(rotatedDataUrl){
+    let m=document.getElementById('cropModal');
+    if(m) m.remove();
+    m=document.createElement('div');
+    m.id='cropModal';
+    m.className='modal-bg no-print';
+    m.innerHTML=`
+      <div class="crop-modal">
+        <h3>סמנו רק כמה עמודות מטפלים בכל פעם</h3>
+        <p class="hint">גררו מלבן סביב 4–5 עמודות. ככה הטקסט נשאר גדול וקריא לזיהוי. אפשר לחזור על זה כמה פעמים על אותה תמונה.</p>
+        <div class="crop-wrap" id="cropWrap">
+          <img id="cropImg" src="${rotatedDataUrl}">
+          <div class="crop-rect" id="cropRect"></div>
+        </div>
+        <div class="crop-actions">
+          <button class="btn btn-outline" id="cropReset">איפוס בחירה</button>
+          <button class="btn btn-outline" id="cropCancel">ביטול</button>
+          <button class="btn btn-primary" id="cropConfirm">✔ זהה את האזור המסומן</button>
+        </div>
+      </div>`;
+    document.body.appendChild(m);
+
+    const wrap=document.getElementById('cropWrap');
+    const img=document.getElementById('cropImg');
+    const rectEl=document.getElementById('cropRect');
+    let start=null, sel=null;
+
+    function getPos(evt){
+      const r=wrap.getBoundingClientRect();
+      const cx=(evt.touches? evt.touches[0].clientX : evt.clientX) - r.left + wrap.scrollLeft;
+      const cy=(evt.touches? evt.touches[0].clientY : evt.clientY) - r.top + wrap.scrollTop;
+      return {x:cx, y:cy};
+    }
+    function pointerDown(evt){
+      start=getPos(evt);
+      sel=null;
+      rectEl.style.display='block';
+      rectEl.style.left=start.x+'px'; rectEl.style.top=start.y+'px';
+      rectEl.style.width='0px'; rectEl.style.height='0px';
+      evt.preventDefault();
+    }
+    function pointerMove(evt){
+      if(!start) return;
+      const p=getPos(evt);
+      const x=Math.min(start.x,p.x), y=Math.min(start.y,p.y);
+      const w=Math.abs(p.x-start.x), h=Math.abs(p.y-start.y);
+      rectEl.style.left=x+'px'; rectEl.style.top=y+'px';
+      rectEl.style.width=w+'px'; rectEl.style.height=h+'px';
+      sel={x,y,w,h};
+      evt.preventDefault();
+    }
+    function pointerUp(){ start=null; }
+    wrap.addEventListener('mousedown',pointerDown);
+    wrap.addEventListener('mousemove',pointerMove);
+    window.addEventListener('mouseup',pointerUp);
+    wrap.addEventListener('touchstart',pointerDown,{passive:false});
+    wrap.addEventListener('touchmove',pointerMove,{passive:false});
+    wrap.addEventListener('touchend',pointerUp);
+
+    document.getElementById('cropReset').onclick=()=>{ sel=null; rectEl.style.display='none'; };
+    document.getElementById('cropCancel').onclick=()=>m.remove();
+    document.getElementById('cropConfirm').onclick=async ()=>{
+      const scale = img.naturalWidth / img.clientWidth;
+      let sx=0, sy=0, sw=img.naturalWidth, sh=img.naturalHeight;
+      if(sel && sel.w>15 && sel.h>15){
+        sx=sel.x*scale; sy=sel.y*scale; sw=sel.w*scale; sh=sel.h*scale;
+      }
+      const canvas=document.createElement('canvas');
+      canvas.width=sw; canvas.height=sh;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      const croppedBase64 = canvas.toDataURL('image/png').split(',')[1];
+      m.remove();
+      await runExtraction(croppedBase64);
+    };
+  }
+
+  async function runExtraction(base64){
+    showModal();
+    try{
+      const extracted = await extractScheduleFromImage(base64, 'image/png');
+      if(!extracted || !extracted.columns || !extracted.columns.length){
+        showModalError('לא הצלחתי לזהות עמודות מטפלים באזור הזה. אפשר לנסות שוב עם אזור קטן יותר, או להוסיף ידנית.');
+        return;
+      }
+      hideModal();
+      // Normalize whatever shape came back (object or legacy plain string) to {name, recommended}
+      const normalizedColumns = extracted.columns.map(c=>({
+        therapist:c.therapist,
+        patients:(c.patients||[]).map(p=>{
+          if(typeof p === 'string') return {name:p, recommended:null};
+          return {name:p.name, recommended:(p.recommended!==undefined? p.recommended : null)};
+        })
+      }));
+      if(day.columns.length){
+        showMergeChoice(normalizedColumns, 2);
+      }else{
+        applyExtractedColumns(normalizedColumns, 'merge', 2);
+        offerAnotherCrop();
+      }
+    }catch(err){
+      console.error(err);
+      const looksLikeNetworkBlock = err instanceof TypeError || /fetch|network|cors/i.test(err.message||'');
+      if(looksLikeNetworkBlock){
+        showModalError('ייבוא תמונה עובד רק כשפותחים את הכלי בתוך הצ\'אט של Claude (שם זה חינמי). באתר הפרוס, בבקשה בצעו את ייבוא התמונה מתוך הצ\'אט — הנתונים יופיעו כאן אוטומטית דרך אותו Firebase המשותף.');
+      }else{
+        showModalError('שגיאה: '+(err && err.message ? err.message : String(err)));
+      }
+    }
+  }
+
+  function showMergeChoice(extractedColumns, recommendedDefault){
+    const m=document.createElement('div');
+    m.className='modal-bg no-print';
+    m.id='choiceModal';
+    m.innerHTML=`
+      <div class="choice-modal">
+        <h3>כבר יש נתונים ליום הזה</h3>
+        <p style="color:var(--ink-soft);font-size:13.5px;">מה לעשות עם ${extractedColumns.length} העמודות שזוהו עכשיו?</p>
+        <button class="btn btn-primary" id="choiceMerge">➕ להוסיף למה שכבר קיים</button>
+        <button class="btn btn-outline" id="choiceReplace">🔄 להחליף הכל בזיהוי החדש</button>
+        <button class="btn btn-outline" id="choiceCancel">ביטול</button>
+      </div>`;
+    document.body.appendChild(m);
+    document.getElementById('choiceMerge').onclick=()=>{ m.remove(); applyExtractedColumns(extractedColumns,'merge',recommendedDefault); offerAnotherCrop(); };
+    document.getElementById('choiceReplace').onclick=()=>{ m.remove(); applyExtractedColumns(extractedColumns,'replace',recommendedDefault); offerAnotherCrop(); };
+    document.getElementById('choiceCancel').onclick=()=>m.remove();
+  }
+
+  function applyExtractedColumns(extractedColumns, mode, recommendedDefault){
+    const recOf = (p)=> (p.recommended!==null && p.recommended!==undefined) ? p.recommended : recommendedDefault;
+    if(mode==='replace'){
+      day.columns = extractedColumns.map(c=>({
+        id:uid(), therapist:c.therapist||'', done:false,
+        patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,note:''}))
+      }));
+    }else{
+      extractedColumns.forEach(c=>{
+        const tname=(c.therapist||'').trim();
+        let existing = day.columns.find(col=>(col.therapist||'').trim()===tname && tname!=='');
+        if(existing){
+          (c.patients||[]).forEach(p=>{
+            if(!existing.patients.some(x=>(x.name||'').trim()===p.name.trim())){
+              existing.patients.push({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,note:''});
+            }
+          });
+        }else{
+          day.columns.push({
+            id:uid(), therapist:c.therapist||'', done:false,
+            patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,note:''}))
+          });
+        }
+      });
+    }
+    scheduleSave();
+    render();
+    showToast('יובא — חשוב לעבור על השמות ולוודא שהזיהוי מדויק');
+  }
+
+  function offerAnotherCrop(){
+    if(!cachedRotatedDataUrl) return;
+    const m=document.createElement('div');
+    m.className='modal-bg no-print';
+    m.id='anotherModal';
+    m.innerHTML=`
+      <div class="choice-modal">
+        <h3>לסמן עוד קבוצת עמודות מאותה תמונה?</h3>
+        <button class="btn btn-primary" id="yesMore">✔ כן, עוד אזור</button>
+        <button class="btn btn-outline" id="noMore">סיימתי עם התמונה</button>
+      </div>`;
+    document.body.appendChild(m);
+    document.getElementById('yesMore').onclick=()=>{ m.remove(); showCropModal(cachedRotatedDataUrl); };
+    document.getElementById('noMore').onclick=()=>m.remove();
+  }
+
+  async function extractScheduleFromImage(base64, mediaType){
+    const systemPrompt = `You are reading a CROPPED close-up photo of part of a Hebrew physical-therapy clinic's daily schedule. It could be any of three different source formats — figure out which one you're looking at and read it accordingly:
+
+FORMAT A — printed "דוח פגישות קבוצתי" report:
+- Each column is headed by ONE THERAPIST'S NAME written once at the top.
+- Below it is a half-hour time grid. DIAGONAL-HATCHED cells = blocked/non-working time, no patient, ever (a therapist can be entirely hatched — that's valid, return an empty patients array).
+- PLAIN WHITE cells are working hours; some contain a label "<patient name>, <time>" — extract only the name. recommended is always null for this format.
+
+FORMAT B — screenshot or photo of a digital scheduling calendar app:
+- Each column is headed by a therapist's name at the top (e.g. "ד״ר סאם חמיס", "ארז קליש", "גיא הורוביץ").
+- Appointments appear as solid colored rectangular blocks (blue/teal/etc.) stacked down the column, each usually containing a patient's name, often followed by a monetary balance like "יתרה(400.00-)" or a similar amount in parentheses — completely ignore all numbers, currency, and the word "יתרה"; extract only the person's name.
+- Some blocks are a different color (often yellow or gray) and contain a general instructional sentence or reminder (e.g. about calling someone, ordering supplies, following up) rather than a single patient's name — these are administrative notes, NOT patient appointments. Skip them entirely; do not extract them as patients.
+- The image may be a photo taken of a physical computer monitor, so it may have screen glare, moiré patterns, or slight blur — still do your best to read the text.
+- recommended is always null for this format.
+
+FORMAT C — a printed/exported tabular "דוח תדירות" (frequency report) list, NOT a calendar grid:
+- It's a plain table/list of rows, one per appointment, each row containing (in this order): a phone number, the patient's full name (last+first, one or more words each), a date (dd/mm/yyyy), the treating therapist's name under a column called "רופא פגישה" (always exactly two words: first+last), OPTIONALLY a single frequency digit from 0-5, and a future appointment time (HH:MM).
+- Group rows by the therapist name (the "רופא פגישה" value) — that becomes the column/therapist.
+- For each row, the patient's recommended value is the frequency digit if one is written in that row; if no digit appears in that row, recommended is null (do NOT guess or default it to any number).
+- COMPLETELY ignore phone numbers, dates, and appointment times in this format too — only the patient name, therapist name, and (if present) the single frequency digit matter.
+
+In ALL formats:
+- The photo may be rotated or skewed; read Hebrew text in whatever orientation it's actually written.
+- This is a crop showing only some of the columns/rows — that's expected and fine.
+
+Task: for each real therapist found, output the therapist's name and the list of DISTINCT patients found under them, each as an object with their name and their recommended value (a number 0-5, or null if not applicable/not written). Deduplicate repeated identical names for the same therapist.
+
+Respond with ONLY a raw JSON object, no markdown fences, no preamble, no time/money/phone/date values anywhere, in this exact shape:
+{"columns":[{"therapist":"<name as written, in Hebrew>","patients":[{"name":"<patient name>","recommended":<0-5 or null>}]}]}
+
+Preserve Hebrew names exactly as written. If a name is genuinely illegible, use your best reading rather than omitting the patient. Include every therapist visible in this crop.`;
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:2000,
+        system: systemPrompt,
+        messages:[
+          { role:"user", content:[
+            { type:"image", source:{ type:"base64", media_type:mediaType, data:base64 } },
+            { type:"text", text:"חלץ את שמות המטפלים והמטופלים מהאזור הזה, בפורמט ה-JSON שהוגדר. התעלם לגמרי משעות." }
+          ]}
+        ]
+      })
+    });
+    const data = await response.json();
+    if(!response.ok || data.type==='error'){
+      const apiMsg = (data && data.error && data.error.message) ? data.error.message : ('HTTP '+response.status);
+      throw new Error('API: '+apiMsg);
+    }
+    const textBlock = (data.content||[]).find(b=>b.type==='text');
+    if(!textBlock) throw new Error('התשובה מהמודל לא הכילה טקסט (ראה קונסול)');
+    let clean = textBlock.text.trim().replace(/^```json/,'').replace(/^```/,'').replace(/```$/,'').trim();
+    try{
+      return JSON.parse(clean);
+    }catch(parseErr){
+      console.error('Raw model text:', textBlock.text);
+      throw new Error('לא הצלחתי לפענח את התשובה כ-JSON: '+parseErr.message);
+    }
+  }
+
+  function showModal(){
+    let m=document.getElementById('importModal');
+    if(m) m.remove();
+    m=document.createElement('div');
+    m.id='importModal';
+    m.className='modal-bg no-print';
+    m.innerHTML=`<div class="modal"><h3>מזהה את הלו״ז מהתמונה…</h3><div class="spinner"></div><p style="color:var(--ink-soft);font-size:13.5px;">זה יכול לקחת כמה שניות</p></div>`;
+    document.body.appendChild(m);
+  }
+  function showModalError(msg){
+    const m=document.getElementById('importModal');
+    if(!m) return;
+    m.innerHTML=`<div class="modal"><h3>לא הצלחתי</h3><p class="err">${msg}</p><button class="btn btn-primary" id="closeModalBtn">סגירה</button></div>`;
+    document.getElementById('closeModalBtn').onclick=()=>m.remove();
+  }
+  function hideModal(){
+    const m=document.getElementById('importModal');
+    if(m) m.remove();
+  }
+
+  // ---------- Print / split PDF ----------
+  els.printBtn.onclick=()=>{
+    if(!day.columns.length){ showToast('אין עדיין נתונים ליום הזה'); return; }
+    showPdfPreviewModal();
+  };
+
+  function buildColsHtml(forScreenPreview){
+    let html='';
+    day.columns.forEach(col=>{
+      html += `<div class="print-col">
+        <div class="print-date">${escapeHtml(fmtDateLabel(currentDate))}</div>
+        <h2>${escapeHtml(col.therapist||'ללא שם')}</h2>
+        <table>
+          <thead><tr><th>מטופל</th><th>תדירות מומלצת</th><th>תדירות בפועל</th><th>הערה</th></tr></thead>
+          <tbody>
+            ${col.patients.map(p=>{
+              const comparable=(p.recommended!==null && p.recommended!==undefined && p.freq!==null && p.freq!==undefined);
+              const mismatch = comparable && p.freq!==p.recommended;
+              const pendingSet = (p.pending!==null && p.pending!==undefined);
+              const forceRed = pendingSet && p.pending==='*';
+              const pendingNumeric = pendingSet && p.pending!=='*';
+              const isR = p.freq==='R';
+
+              let rowClass='';
+              if(forceRed) rowClass='mismatch-row';
+              else if(isR) rowClass='r-row';
+              else if(!pendingNumeric && mismatch) rowClass='mismatch-row';
+
+              let actualCell;
+              if(forceRed){
+                const baseVal = (p.freq===null||p.freq===undefined) ? '' : p.freq;
+                actualCell = `${baseVal}*`;
+              }
+              else if(pendingNumeric) actualCell=`${p.pending}/${(p.recommended!==null&&p.recommended!==undefined)?p.recommended:'-'}`;
+              else actualCell=(p.freq===null||p.freq===undefined?'—':p.freq);
+
+              const actualCellClass = (!forceRed && pendingNumeric) ? ' class="pending-cell"' : '';
+
+              return `<tr class="${rowClass}">
+              <td>${escapeHtml(p.name||'')}</td>
+              <td>${p.recommended===null||p.recommended===undefined?'—':p.recommended}</td>
+              <td${actualCellClass}>${actualCell}</td>
+              <td>${escapeHtml(p.note||'')}</td>
+            </tr>`;}).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    });
+    return html;
+  }
+
+  function showPdfPreviewModal(){
+    const colsHtml = buildColsHtml(true);
+    const totalPatients = day.columns.reduce((s,c)=>s+c.patients.length,0);
+    const mismatchCount = day.columns.reduce((s,c)=>s+c.patients.filter(p=>{
+      const comparable=(p.recommended!==null && p.recommended!==undefined && p.freq!==null && p.freq!==undefined);
+      return comparable && p.freq!==p.recommended;
+    }).length,0);
+    const pendingCount = day.columns.reduce((s,c)=>s+c.patients.filter(p=>p.pending!==null && p.pending!==undefined).length,0);
+
+    let m=document.getElementById('pdfPreviewModal');
+    if(m) m.remove();
+    m=document.createElement('div');
+    m.id='pdfPreviewModal';
+    m.className='modal-bg no-print';
+    m.innerHTML=`
+      <div class="crop-modal" style="max-width:640px;">
+        <h3>תצוגה מקדימה לפני הפקה</h3>
+        <p class="hint">${day.columns.length} עמודות, ${totalPatients} מטופלים${mismatchCount? ` — ⚠️ ${mismatchCount} אי-התאמות באדום`:''}${pendingCount? ` — 🟠 ${pendingCount} עוד לקבוע בכתום`:''}</p>
+        <div class="crop-wrap" style="background:#fff;text-align:right;">
+          <div style="width:100%;max-height:50vh;overflow:auto;">
+            <style>
+              #pdfPreviewModal .print-col{padding:14px 6px;border-bottom:1px solid #eee;}
+              #pdfPreviewModal .print-col h2{font-size:15px;border-bottom:2px solid #152238;padding-bottom:4px;}
+              #pdfPreviewModal table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;}
+              #pdfPreviewModal th,#pdfPreviewModal td{border:1px solid #ddd;padding:5px 7px;}
+              #pdfPreviewModal th{background:#f0f0f0;}
+              #pdfPreviewModal tr.mismatch-row td{background:#fbe9e9;color:#c14545;font-weight:700;}
+              #pdfPreviewModal tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
+              #pdfPreviewModal td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
+              #pdfPreviewModal .print-date{font-size:11px;color:#777;}
+            </style>
+            ${colsHtml}
+          </div>
+        </div>
+        <div class="crop-actions">
+          <button class="btn btn-outline" id="pdfPreviewCancel">✕ ביטול, לא להפיק</button>
+          <button class="btn btn-primary" id="pdfPreviewConfirm">✔ מאשר — הפק PDF</button>
+        </div>
+      </div>`;
+    document.body.appendChild(m);
+    document.getElementById('pdfPreviewCancel').onclick=()=>m.remove();
+    document.getElementById('pdfPreviewConfirm').onclick=()=>{
+      m.remove();
+      downloadPrintableFile();
+    };
+  }
+
+  async function downloadPrintableFile(){
+    const colsHtml = buildColsHtml(false);
+
+    const fullHtml = `<!DOCTYPE html>
+<html lang="he" dir="rtl"><head><meta charset="UTF-8">
+<title>תדירות ${escapeHtml(fmtDateKey(currentDate))}</title>
+<style>
+  body{font-family:'Heebo',Arial,sans-serif;margin:0;color:#152238;}
+  .print-col{page-break-after:always;padding:28px;}
+  .print-col:last-child{page-break-after:auto;}
+  .print-col h2{font-family:'Rubik',Arial,sans-serif;border-bottom:3px solid #152238;padding-bottom:8px;}
+  .print-col table{width:100%;border-collapse:collapse;margin-top:14px;}
+  .print-col th,.print-col td{border:1px solid #ccc;padding:8px 10px;text-align:right;font-size:15px;}
+  .print-col th{background:#f0f0f0;}
+  .print-col tr.mismatch-row td{background:#fbe9e9;color:#c14545;font-weight:700;}
+  .print-col tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
+  .print-col td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
+  .print-date{color:#555;font-size:13px;margin-bottom:2px;}
+  .hint-bar{background:#eef1f4;color:#4a5670;padding:10px 16px;font-size:13px;text-align:center;}
+  @media print{ .hint-bar{display:none;} }
+</style></head>
+<body>
+<div class="hint-bar">קובץ מוכן להדפסה — לחצו Ctrl/Cmd+P ובחרו "שמירה כ-PDF" כדי לייצא PDF מחולק לפי עמודות. אדום = אי-התאמה (או סימון *). סגול = מסומן R. כתום = המטופל עוד צריך לקבוע פגישות השבוע</div>
+${colsHtml}
+</body></html>`;
+
+    const blob = new Blob([fullHtml], {type:'text/html'});
+    const filename = `תדירות_${fmtDateKey(currentDate)}.html`;
+
+    // 1) Try native share sheet (works well on mobile, even inside embedded previews)
+    try{
+      const file = new File([blob], filename, {type:'text/html'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title:'תדירות '+fmtDateKey(currentDate)});
+        showToast('נשלח לשיתוף — פתחו את הקובץ ולחצו הדפסה כדי לשמור כ-PDF');
+        return;
+      }
+    }catch(shareErr){
+      // user cancelled share or share failed — fall through to next method
+    }
+
+    // 2) Try opening in a new tab so the user can print/save from there
+    try{
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, '_blank');
+      if(win){
+        showToast('נפתח בכרטיסייה חדשה — לחצו הדפסה ← שמירה כ-PDF');
+        setTimeout(()=>URL.revokeObjectURL(url), 4000);
+        return;
+      }
+      URL.revokeObjectURL(url);
+    }catch(openErr){ /* fall through */ }
+
+    // 3) Fallback: direct download link
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url), 2000);
+      showToast('הקובץ ירד — פתחו אותו ולחצו הדפסה כדי לשמור כ-PDF');
+    }catch(dlErr){
+      showToast('לא הצלחתי להפיק את הקובץ כאן. נסו לפתוח את הכלי בכרטיסייה מלאה של הדפדפן ולנסות שוב.');
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- init ----------
+  goTo(new Date());
+})();
+</script>
+</body>
+</html>
