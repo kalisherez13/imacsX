@@ -730,7 +730,11 @@ window.addEventListener('unhandledrejection', function(e){
   els.galleryBtn.onclick=()=>els.galleryInput.click();
   els.cameraInput.onchange=(e)=>handlePickedFile(e, els.cameraInput);
   els.galleryInput.onchange=(e)=>handlePickedFile(e, els.galleryInput);
-  els.pdfBtn.onclick=(e)=>{ window.__pdfDebug = !!(e && e.shiftKey); els.pdfInput.click(); };
+  els.pdfBtn.onclick=(e)=>{
+    const urlDebug = /[?&]debug=1/.test(location.search);
+    window.__pdfDebug = urlDebug || !!(e && e.shiftKey);
+    els.pdfInput.click();
+  };
   els.pdfInput.onchange=(e)=>handlePickedPdf(e, els.pdfInput);
 
   if(typeof pdfjsLib !== 'undefined'){
