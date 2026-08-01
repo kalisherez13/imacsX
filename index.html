@@ -773,7 +773,13 @@ window.addEventListener('unhandledrejection', function(e){
       });
       hideModal();
       if(matchedRows===0){
-        showModalError('לא הצלחתי לזהות שורות בפורמט המוכר בקובץ הזה. ודאו שזה "דוח תדירות" מאותה התוכנה, או הוסיפו ידנית.');
+        const nonEmpty = lines.filter(l=>l.trim());
+        if(nonEmpty.length===0){
+          showModalError('לא הצלחתי לחלץ שום טקסט מהקובץ. ייתכן שזה PDF סרוק (תמונה) ולא PDF עם טקסט אמיתי.');
+        }else{
+          const sample = nonEmpty.slice(0,6).map((l,i)=>(i+1)+') '+l.trim().slice(0,90)).join('\n');
+          showModalError('חילצתי '+nonEmpty.length+' שורות מהקובץ, אבל אף אחת לא בפורמט המוכר.\n\nדוגמאות מהקובץ:\n'+sample);
+        }
         return;
       }
       const extractedColumns = Array.from(columnsMap.entries()).map(([therapist,patients])=>({therapist,patients}));
@@ -1143,9 +1149,15 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
     document.body.appendChild(m);
   }
   function showModalError(msg){
-    const m=document.getElementById('importModal');
-    if(!m) return;
-    m.innerHTML=`<div class="modal"><h3>לא הצלחתי</h3><p class="err">${msg}</p><button class="btn btn-primary" id="closeModalBtn">סגירה</button></div>`;
+    let m=document.getElementById('importModal');
+    if(!m){
+      m=document.createElement('div');
+      m.id='importModal';
+      m.className='modal-bg no-print';
+      document.body.appendChild(m);
+    }
+    const safe = escapeHtml(String(msg));
+    m.innerHTML=`<div class="modal"><h3>לא הצלחתי</h3><p class="err" style="white-space:pre-wrap;text-align:right;direction:rtl;max-height:50vh;overflow:auto;">${safe}</p><button class="btn btn-primary" id="closeModalBtn">סגירה</button></div>`;
     document.getElementById('closeModalBtn').onclick=()=>m.remove();
   }
   function hideModal(){
