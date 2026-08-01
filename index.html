@@ -764,6 +764,14 @@ window.addEventListener('unhandledrejection', function(e){
 
   const PDF_DATE_RE = /\d{2}\/\d{2}\/\d{4}/;
 
+  // pdf.js emits RTL text with the characters in visual (reversed) order.
+  // Reversing the whole string restores both letter order and word order.
+  // Latin-only names (e.g. "desiree baron") are already correct — leave them.
+  function fixHebrewOrder(s){
+    if(!/[\u05D0-\u05EA]/.test(s)) return s;
+    return [...s].reverse().join('').replace(/\s+/g,' ').trim();
+  }
+
   // Returns {therapist, patient, freq} or null
   function parsePdfRow(line){
     const dm = line.match(PDF_DATE_RE);
@@ -791,7 +799,7 @@ window.addEventListener('unhandledrejection', function(e){
     else patient = clean(after) || clean(before);
 
     if(!patient) return null;
-    return {therapist, patient, freq};
+    return {therapist, patient: fixHebrewOrder(patient), freq};
   }
 
   async function handlePickedPdf(e, inputEl){
