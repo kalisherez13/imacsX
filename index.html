@@ -68,6 +68,14 @@
   .pill.pending{background:var(--amber-bg);color:var(--amber);}
   .missing-names{color:var(--red);font-weight:600;}
 
+  .sync-status{
+    padding:6px 18px;font-size:12.5px;font-weight:600;
+    border-bottom:1px solid var(--line);
+  }
+  .sync-status.online{background:#e4f3ef;color:var(--teal-dark);}
+  .sync-status.connecting{background:var(--amber-bg);color:var(--amber);}
+  .sync-status.offline{background:var(--red-bg);color:var(--red);}
+
   .board{
     padding:16px;
     display:flex;gap:14px;overflow-x:auto;
@@ -417,41 +425,70 @@ window.addEventListener('unhandledrejection', function(e){
     }
   }
 
-  async function goTo(date){
+  function goTo(date){
     currentDate = date;
     els.dateLabel.textContent = fmtDateLabel(currentDate);
     const key = fmtDateKey(currentDate);
     if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot=null; }
 
+    // Render immediately — the app is usable right away, no waiting for the network.
+    day = emptyDay(key);
+    lastSavedStr = null;
+    render();
+
     if(!FIREBASE_READY){
-      day = emptyDay(key);
-      render();
-      showToast('⚠️ Firebase עוד לא מחובר — ערכו את firebaseConfig בקובץ כדי לאפשר שמירה וסנכרון');
+      setSyncStatus('offline', 'לא מחובר — ערכו את firebaseConfig בקובץ');
       return;
     }
 
-    els.board.innerHTML = '<div style="padding:40px;color:var(--ink-soft);width:100%;text-align:center;">מתחבר…</div>';
-    try{
-      const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error('תם הזמן להתחברות (בדקו חיבור אינטרנט / הגדרות Firebase)')), 8000));
-      await Promise.race([fbAuthReady, timeout]);
+    // Connect in the background; data arrives when it arrives.
+    setSyncStatus('connecting', 'מסנכרן…');
+    connectInBackground(key);
+  }
+
+  function connectInBackground(key){
+    let settled = false;
+    const watchdog = setTimeout(()=>{
+      if(!settled) setSyncStatus('offline', 'לא הצלחתי להתחבר — עובד מקומית בלבד');
+    }, 10000);
+
+    Promise.resolve(fbAuthReady).then(()=>{
       unsubscribeSnapshot = fbDb.collection('schedules').doc(key).onSnapshot(snap=>{
+        settled = true;
+        clearTimeout(watchdog);
+        setSyncStatus('online', 'מסונכרן');
         const incomingStr = snap.exists ? JSON.stringify(snap.data()) : null;
         if(incomingStr === lastSavedStr) return; // our own write echoing back — ignore
+        // Don't wipe local edits made while offline with an empty remote doc
+        if(!snap.exists && day && day.columns && day.columns.length) return;
         day = snap.exists ? snap.data() : emptyDay(key);
         lastSavedStr = incomingStr;
         render();
       }, err=>{
+        settled = true;
+        clearTimeout(watchdog);
         console.error(err);
-        day = emptyDay(key);
-        render();
-        showToast('שגיאת סנכרון (בדקו שה-Rules פורסמו ב-Firestore): '+err.message);
+        setSyncStatus('offline', 'שגיאת סנכרון: '+err.message);
       });
-    }catch(err){
+    }).catch(err=>{
+      settled = true;
+      clearTimeout(watchdog);
       console.error(err);
-      day = emptyDay(key);
-      render();
-      showToast('שגיאת חיבור ל-Firebase: '+(err && err.message ? err.message : String(err)));
+      setSyncStatus('offline', 'שגיאת התחברות: '+(err && err.message ? err.message : String(err)));
+    });
+  }
+
+  function setSyncStatus(state, text){
+    let el = document.getElementById('syncStatus');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'syncStatus';
+      el.className = 'sync-status no-print';
+      els.statusStrip.parentNode.insertBefore(el, els.statusStrip);
     }
+    el.className = 'sync-status no-print '+state;
+    const icon = state==='online' ? '🟢' : (state==='connecting' ? '🔄' : '🔴');
+    el.textContent = icon+' '+text;
   }
 
   els.prevDay.onclick=()=>{ const d=new Date(currentDate); d.setDate(d.getDate()-1); goTo(d); };
@@ -960,7 +997,7 @@ window.addEventListener('unhandledrejection', function(e){
       console.error(err);
       const looksLikeNetworkBlock = err instanceof TypeError || /fetch|network|cors/i.test(err.message||'');
       if(looksLikeNetworkBlock){
-        showModalError('ייבוא תמונה עובד רק כשפותחים את הכלי בתוך הצ\'אט של Claude (שם זה חינמי). באתר הפרוס, בבקשה בצעו את ייבוא התמונה מתוך הצ\'אט — הנתונים יופיעו כאן אוטומטית דרך אותו Firebase המשותף.');
+        showModalError('זיהוי תמונה בעזרת AI אינו זמין באתר הזה (הוא דורש מפתח API בתשלום). במקומו השתמשו ב-"📄 ייבוא מקובץ PDF תדירות" — הוא מדויק יותר, חינמי, ועובד כאן מצוין.');
       }else{
         showModalError('שגיאה: '+(err && err.message ? err.message : String(err)));
       }
