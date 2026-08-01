@@ -764,52 +764,42 @@ window.addEventListener('unhandledrejection', function(e){
 
   const PDF_DATE_RE = /\d{2}\/\d{2}\/\d{4}/;
 
-  // pdf.js emits RTL text with the characters in visual (reversed) order.
-  // Reversing the whole string restores both letter order and word order.
-  // Latin-only names (e.g. "desiree baron") are already correct — leave them.
-  function fixHebrewOrder(s){
-    if(!/[\u05D0-\u05EA]/.test(s)) return s.replace(/[\u0001\s]+/g,' ').trim();
-    // Reverse, then turn the item-boundary markers back into real spaces.
-    return [...s].reverse().join('').replace(/[\u0001\s]+/g,' ').trim();
+  // Reverse the letters of a single Hebrew token (pdf.js gives visual order).
+  function fixToken(t){
+    return /[\u05D0-\u05EA]/.test(t) ? [...t].reverse().join('') : t;
   }
 
-  // Returns {therapist, patient, freq} or null
-  function parsePdfRow(line){
-    // Treat the item-boundary marker as whitespace for matching purposes,
-    // but keep it inside the patient text so word breaks survive reversal.
-    const SEPC = '\u0001';
-    const flat = line.split(SEPC).join(' ');
-
-    const dm = flat.match(PDF_DATE_RE);
-    if(!dm || !/\b\d{2}:\d{2}\b/.test(flat)) return null; // real data rows only
+  // tokens: right-to-left ordered strings for one row.
+  // Returns {therapist, patient, freq} or null.
+  function parsePdfTokens(tokens){
+    const flat = tokens.join(' ');
+    if(!PDF_DATE_RE.test(flat) || !/\b\d{2}:\d{2}\b/.test(flat)) return null;
     const therapist = findTherapist(flat);
     if(!therapist) return null;
 
-    // Split the ORIGINAL (marker-preserving) line at the same date position
-    const dIdxOrig = line.split(SEPC).join(' ').indexOf(dm[0]);
-    const before = line.slice(0, dIdxOrig);
-    const after  = line.slice(dIdxOrig + dm[0].length);
+    const dIdx = tokens.findIndex(t=>PDF_DATE_RE.test(t));
+    if(dIdx < 0) return null;
+
+    const left  = tokens.slice(0, dIdx);
+    const right = tokens.slice(dIdx+1);
+
+    const isNoise = t => /^\d{2}:\d{2}(:\d{2})?$/.test(t)   // times
+                      || /^[\d\-]{5,}$/.test(t)              // phone numbers
+                      || /^[0-5]$/.test(t)                   // frequency digit
+                      || PDF_DATE_RE.test(t);
+
+    // The therapist and the frequency live on the same side of the date.
+    const leftHasTherapist = !!findTherapist(left.join(' '));
+    const therapistSide = leftHasTherapist ? left : right;
+    const nameSide      = leftHasTherapist ? right : left;
 
     let freq = null;
-    const beforeFlat = before.split(SEPC).join(' ');
-    const afterFlat  = after.split(SEPC).join(' ');
-    const fm = beforeFlat.match(/(?:^|\s)([0-5])(?=\s|$)/) || afterFlat.match(/(?:^|\s)([0-5])(?=\s|$)/);
-    if(fm) freq = Number(fm[1]);
+    for(const t of therapistSide){ if(/^[0-5]$/.test(t)){ freq = Number(t); break; } }
 
-    const clean = s => s.replace(/\b\d{2}:\d{2}(:\d{2})?\b/g,' ')
-                        .replace(/[\d\-]{5,}/g,' ')
-                        .replace(new RegExp('(?:^|[\\s'+SEPC+'])[0-5](?=[\\s'+SEPC+']|$)','g'),' ')
-                        .replace(/[ \t]+/g,' ').trim();
-
-    const beforeHas = !!findTherapist(beforeFlat);
-    const afterHas  = !!findTherapist(afterFlat);
-    let patient;
-    if(beforeHas && !afterHas) patient = clean(after);
-    else if(afterHas && !beforeHas) patient = clean(before);
-    else patient = clean(after) || clean(before);
-
-    if(!patient || !patient.replace(new RegExp(SEPC,'g'),'').trim()) return null;
-    return {therapist, patient: fixHebrewOrder(patient), freq};
+    const words = nameSide.filter(t=>!isNoise(t)).map(fixToken);
+    const patient = words.join(' ').replace(/\s+/g,' ').trim();
+    if(!patient) return null;
+    return {therapist, patient, freq};
   }
 
   async function handlePickedPdf(e, inputEl){
@@ -828,13 +818,11 @@ window.addEventListener('unhandledrejection', function(e){
     showModal();
     try{
       const arrayBuffer = await file.arrayBuffer();
-      const lines = await extractPdfLines(arrayBuffer);
+      const rows = await extractPdfRows(arrayBuffer);
       const columnsMap = new Map(); // therapist -> patients[]
       let matchedRows=0;
-      lines.forEach(line=>{
-        const trimmed=line.trim();
-        if(!trimmed) return;
-        const parsed = parsePdfRow(trimmed);
+      rows.forEach(tokens=>{
+        const parsed = parsePdfTokens(tokens);
         if(!parsed) return;
         matchedRows++;
         if(!columnsMap.has(parsed.therapist)) columnsMap.set(parsed.therapist, []);
@@ -842,7 +830,7 @@ window.addEventListener('unhandledrejection', function(e){
       });
       hideModal();
       if(matchedRows===0){
-        const nonEmpty = lines.filter(l=>l.trim());
+        const nonEmpty = rows.map(t=>t.join(' ')).filter(l=>l.trim());
         if(nonEmpty.length===0){
           showModalError('לא הצלחתי לחלץ שום טקסט מהקובץ. ייתכן שזה PDF סרוק (תמונה) ולא PDF עם טקסט אמיתי.');
         }else{
@@ -865,38 +853,38 @@ window.addEventListener('unhandledrejection', function(e){
     }
   }
 
-  async function extractPdfLines(arrayBuffer){
+  // Returns an array of rows; each row is an array of token strings ordered
+  // right-to-left (i.e. the logical reading order for this Hebrew report).
+  async function extractPdfRows(arrayBuffer){
     const pdf = await pdfjsLib.getDocument({data:arrayBuffer}).promise;
-    const allLines=[];
+    const rowsOut=[];
     for(let i=1;i<=pdf.numPages;i++){
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      const items = content.items;
-      // group text items into physical lines by rounded y-coordinate
-      const rows = new Map();
-      items.forEach(it=>{
+      // group text items into physical lines by y-coordinate
+      const lines = new Map();
+      content.items.forEach(it=>{
+        if(!it.str || !it.str.trim()) return;
         const y = Math.round(it.transform[5]);
         let key = y;
-        for(const k of rows.keys()){ if(Math.abs(k-y)<=2){ key=k; break; } }
-        if(!rows.has(key)) rows.set(key, []);
-        rows.get(key).push(it);
+        for(const k of lines.keys()){ if(Math.abs(k-y)<=2){ key=k; break; } }
+        if(!lines.has(key)) lines.set(key, []);
+        lines.get(key).push(it);
       });
-      const ys = Array.from(rows.keys()).sort((a,b)=>b-a); // top to bottom
+      const ys = Array.from(lines.keys()).sort((a,b)=>b-a); // top to bottom
       ys.forEach(y=>{
-        const rowItems = rows.get(y);
-        // Join with a marker (not a plain space) so item boundaries survive the
-        // RTL reversal later — otherwise "זלוטניק" + "עודדה" glue together.
-        const SEP = '\u0001';
-        const asc = rowItems.slice().sort((a,b)=>a.transform[4]-b.transform[4]).map(it=>it.str.trim()).filter(Boolean).join(SEP);
-        const desc = rowItems.slice().sort((a,b)=>b.transform[4]-a.transform[4]).map(it=>it.str.trim()).filter(Boolean).join(SEP);
-        // pick whichever token order actually matches our expected row shape
-        const ascT = asc.trim(), descT = desc.trim();
-        if(parsePdfRow(ascT)) allLines.push(asc);
-        else if(parsePdfRow(descT)) allLines.push(desc);
-        else allLines.push(asc); // keep as-is; will just be skipped by the parser (e.g. header/footer lines)
+        // Right-to-left order = descending x. Split any item that itself
+        // contains spaces, preserving that same right-to-left ordering.
+        const toks=[];
+        lines.get(y).slice().sort((a,b)=>b.transform[4]-a.transform[4]).forEach(it=>{
+          const parts = it.str.trim().split(/\s+/).filter(Boolean);
+          parts.reverse(); // within an item, rightmost word comes first
+          parts.forEach(t=>toks.push(t));
+        });
+        if(toks.length) rowsOut.push(toks);
       });
     }
-    return allLines;
+    return rowsOut;
   }
 
   async function handlePickedFile(e, inputEl){
