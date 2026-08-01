@@ -286,7 +286,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 11</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 12</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -896,12 +896,32 @@ window.addEventListener('unhandledrejection', function(e){
           }
         }
         if(cur) toks.push(cur);
-        // Reading right-to-left leaves Hebrew correct but flips everything else
-        // (dates, times, phone numbers, Latin names) — restore those.
-        const fixed = toks.filter(t=>t.trim()).map(t=>
-          /[\u05D0-\u05EA]/.test(t) ? t : [...t].reverse().join('')
-        );
-        if(fixed.length) rowsOut.push(fixed);
+        let list = toks.filter(t=>t.trim());
+
+        // Whether this row's glyphs came out visually reversed varies by PDF and
+        // by pdf.js version. The date is a reliable tell: a correct row contains
+        // dd/mm/yyyy, a reversed one contains its mirror (e.g. 6202/70/13).
+        const looksReversed = list.some(t=>/^\d{4}\/\d{2}\/\d{2}$/.test(t))
+                           && !list.some(t=>/^\d{2}\/\d{2}\/\d{4}$/.test(t));
+        if(looksReversed){
+          list = list.map(t=>/[\u05D0-\u05EA]/.test(t) ? t : [...t].reverse().join(''));
+        }
+
+        // Hebrew orientation: letter-set matching is order-blind, so check
+        // whether a therapist's name actually reads correctly in this row.
+        const readsRight = txt => {
+          const flat = hebOnly(txt);
+          return THERAPISTS.some(n=>{
+            const parts = hebOnly(n);
+            return parts && flat.includes(parts);
+          });
+        };
+        const hebRev = list.map(t=>/[\u05D0-\u05EA]/.test(t) ? [...t].reverse().join('') : t);
+        if(!readsRight(list.join('')) && readsRight(hebRev.join(''))){
+          list = hebRev;
+        }
+
+        if(list.length) rowsOut.push(list);
       });
     }
     return rowsOut;
