@@ -406,6 +406,7 @@ window.addEventListener('unhandledrejection', function(e){
       showToast('⚠️ Firebase עוד לא מחובר — ערכו את firebaseConfig בקובץ');
       return;
     }
+    if(!day) return;
     const dataStr = JSON.stringify(day);
     lastSavedStr = dataStr;
     try{
@@ -458,6 +459,9 @@ window.addEventListener('unhandledrejection', function(e){
 
   // ---------- Rendering ----------
   function render(){
+    // Safety net: a null/malformed day must never crash the app
+    if(!day || typeof day !== 'object') day = emptyDay(fmtDateKey(currentDate));
+    if(!Array.isArray(day.columns)) day.columns = [];
     renderStatusStrip();
     renderBoard();
   }
@@ -676,6 +680,8 @@ window.addEventListener('unhandledrejection', function(e){
   }
 
   function addColumn(){
+    if(!day) day = emptyDay(fmtDateKey(currentDate));
+    if(!Array.isArray(day.columns)) day.columns = [];
     day.columns.push({id:uid(), therapist:'', done:false, patients:[{id:uid(),name:'',freq:null,recommended:2,pending:null,note:''}]});
     scheduleSave();
   }
@@ -734,7 +740,7 @@ window.addEventListener('unhandledrejection', function(e){
         return;
       }
       const extractedColumns = Array.from(columnsMap.entries()).map(([therapist,patients])=>({therapist,patients}));
-      if(day.columns.length){
+      if(day && day.columns && day.columns.length){
         showMergeChoice(extractedColumns, null);
       }else{
         applyExtractedColumns(extractedColumns, 'merge', null);
@@ -944,7 +950,7 @@ window.addEventListener('unhandledrejection', function(e){
           return {name:p.name, recommended:(p.recommended!==undefined? p.recommended : null)};
         })
       }));
-      if(day.columns.length){
+      if(day && day.columns && day.columns.length){
         showMergeChoice(normalizedColumns, 2);
       }else{
         applyExtractedColumns(normalizedColumns, 'merge', 2);
@@ -980,6 +986,8 @@ window.addEventListener('unhandledrejection', function(e){
   }
 
   function applyExtractedColumns(extractedColumns, mode, recommendedDefault){
+    if(!day) day = emptyDay(fmtDateKey(currentDate));
+    if(!Array.isArray(day.columns)) day.columns = [];
     const recOf = (p)=> (p.recommended!==null && p.recommended!==undefined) ? p.recommended : recommendedDefault;
     if(mode==='replace'){
       day.columns = extractedColumns.map(c=>({
@@ -1110,7 +1118,7 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
 
   // ---------- Print / split PDF ----------
   els.printBtn.onclick=()=>{
-    if(!day.columns.length){ showToast('אין עדיין נתונים ליום הזה'); return; }
+    if(!day || !day.columns || !day.columns.length){ showToast('אין עדיין נתונים ליום הזה'); return; }
     showPdfPreviewModal();
   };
 
