@@ -730,11 +730,7 @@ window.addEventListener('unhandledrejection', function(e){
   els.galleryBtn.onclick=()=>els.galleryInput.click();
   els.cameraInput.onchange=(e)=>handlePickedFile(e, els.cameraInput);
   els.galleryInput.onchange=(e)=>handlePickedFile(e, els.galleryInput);
-  els.pdfBtn.onclick=(e)=>{
-    const urlDebug = /[?&]debug=1/.test(location.search);
-    window.__pdfDebug = urlDebug || !!(e && e.shiftKey);
-    els.pdfInput.click();
-  };
+  els.pdfBtn.onclick=()=>els.pdfInput.click();
   els.pdfInput.onchange=(e)=>handlePickedPdf(e, els.pdfInput);
 
   if(typeof pdfjsLib !== 'undefined'){
@@ -761,17 +757,15 @@ window.addEventListener('unhandledrejection', function(e){
     for(const t of THERAPIST_INDEX){
       const cov = letterCoverage(t.counts, hay);
       const score = cov + t.len*0.0001; // tie-break toward longer (more specific) names
-      if(cov >= 0.85 && score > bestScore){ bestScore=score; best=t.name; }
+      if(cov >= 1 && score > bestScore){ bestScore=score; best=t.name; }
     }
     return best;
   }
 
   const PDF_DATE_RE = /\d{2}\/\d{2}\/\d{4}/;
 
-  // Reverse the letters of a single Hebrew token (pdf.js gives visual order).
-  function fixToken(t){
-    return /[\u05D0-\u05EA]/.test(t) ? [...t].reverse().join('') : t;
-  }
+  // Tokens are already normalized by extractPdfRows.
+  function fixToken(t){ return t; }
 
   // tokens: right-to-left ordered strings for one row.
   // Returns {therapist, patient, freq} or null.
@@ -823,20 +817,6 @@ window.addEventListener('unhandledrejection', function(e){
     try{
       const arrayBuffer = await file.arrayBuffer();
 
-      // Diagnostic: hold Shift while clicking the import button to dump the raw
-      // pdf.js items for the first few rows (helps debug text segmentation).
-      if(window.__pdfDebug){
-        const pdf = await pdfjsLib.getDocument({data:arrayBuffer}).promise;
-        const page = await pdf.getPage(1);
-        const content = await page.getTextContent({disableCombineTextItems:true});
-        const sample = content.items.slice(0,40)
-          .map(it=>JSON.stringify(it.str)+' @x='+Math.round(it.transform[4])+' y='+Math.round(it.transform[5]))
-          .join('\n');
-        hideModal();
-        showModalError('RAW pdf.js items (first 40):\n\n'+sample);
-        return;
-      }
-
       const rows = await extractPdfRows(arrayBuffer);
       const columnsMap = new Map(); // therapist -> patients[]
       let matchedRows=0;
@@ -874,16 +854,18 @@ window.addEventListener('unhandledrejection', function(e){
 
   // Returns an array of rows; each row is an array of token strings ordered
   // right-to-left (i.e. the logical reading order for this Hebrew report).
+  // NOTE: this PDF emits ONE GLYPH per text item, so we must rebuild words from
+  // character x-positions and treat a wide gap as a word separator.
   async function extractPdfRows(arrayBuffer){
     const pdf = await pdfjsLib.getDocument({data:arrayBuffer}).promise;
     const rowsOut=[];
     for(let i=1;i<=pdf.numPages;i++){
       const page = await pdf.getPage(i);
-      const content = await page.getTextContent({disableCombineTextItems: true});
-      // group text items into physical lines by y-coordinate
+      const content = await page.getTextContent();
+      // group glyphs into physical lines by y-coordinate
       const lines = new Map();
       content.items.forEach(it=>{
-        if(!it.str || !it.str.trim()) return;
+        if(!it.str) return;
         const y = Math.round(it.transform[5]);
         let key = y;
         for(const k of lines.keys()){ if(Math.abs(k-y)<=2){ key=k; break; } }
@@ -892,15 +874,38 @@ window.addEventListener('unhandledrejection', function(e){
       });
       const ys = Array.from(lines.keys()).sort((a,b)=>b-a); // top to bottom
       ys.forEach(y=>{
-        // Right-to-left order = descending x. Split any item that itself
-        // contains spaces, preserving that same right-to-left ordering.
+        // Sort right-to-left (descending x) — the reading order of this report.
+        const glyphs = lines.get(y).slice().sort((a,b)=>b.transform[4]-a.transform[4]);
+
+        // Typical glyph advance on this line, used as the gap threshold.
+        const advances=[];
+        for(let k=0;k<glyphs.length-1;k++){
+          const d = glyphs[k].transform[4] - glyphs[k+1].transform[4];
+          if(d>0) advances.push(d);
+        }
+        advances.sort((a,b)=>a-b);
+        const typical = advances.length ? advances[Math.floor(advances.length/2)] : 6;
+        const gapLimit = typical * 1.8;
+
         const toks=[];
-        lines.get(y).slice().sort((a,b)=>b.transform[4]-a.transform[4]).forEach(it=>{
-          const parts = it.str.trim().split(/\s+/).filter(Boolean);
-          parts.reverse(); // within an item, rightmost word comes first
-          parts.forEach(t=>toks.push(t));
-        });
-        if(toks.length) rowsOut.push(toks);
+        let cur='';
+        for(let k=0;k<glyphs.length;k++){
+          const ch = glyphs[k].str;
+          if(/^\s+$/.test(ch)){ if(cur){ toks.push(cur); cur=''; } continue; }
+          cur += ch;
+          const next = glyphs[k+1];
+          if(next){
+            const gap = glyphs[k].transform[4] - next.transform[4];
+            if(gap > gapLimit){ toks.push(cur); cur=''; }
+          }
+        }
+        if(cur) toks.push(cur);
+        // Reading right-to-left leaves Hebrew correct but flips everything else
+        // (dates, times, phone numbers, Latin names) — restore those.
+        const fixed = toks.filter(t=>t.trim()).map(t=>
+          /[\u05D0-\u05EA]/.test(t) ? t : [...t].reverse().join('')
+        );
+        if(fixed.length) rowsOut.push(fixed);
       });
     }
     return rowsOut;
