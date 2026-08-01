@@ -737,33 +737,61 @@ window.addEventListener('unhandledrejection', function(e){
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
 
-  // The same report can come out of pdf.js in two token orders depending on how
-  // the bidirectional Hebrew text is laid out. Support both.
-  // Forward:  <phone> <patient> <dd/mm/yyyy> <therapist first> <therapist last> [freq] <HH:MM>
-  const PDF_ROW_RE = /^(\S+)\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\S+)\s+(\S+)\s+(?:(\d)\s+)?(\d{2}:\d{2})$/;
-  // Reversed: <HH:MM> [freq] <therapist last> <therapist first> <dd/mm/yyyy> <patient> <phone>
-  const PDF_ROW_RE_REV = /^(\d{2}:\d{2})\s+(?:(\d)\s+)?(\S+)\s+(\S+)\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+(\S+)$/;
+  // Known clinic therapists. pdf.js scrambles Hebrew text badly, so instead of
+  // parsing by position we identify the therapist by letter-coverage against this
+  // list, and locate the patient relative to the date (which never gets garbled).
+  const THERAPISTS = ['ד"ר סאם חמיס','אופיר פינצי','ארז קליש','גיא הורוביץ','גלי נאמן','זהר אדר','יניב אגאייב','עופרי רכבוך','עמית בר','רוני בירן','עמית דודידוף'];
 
-  // Returns {patient, therapist, freq} or null
+  function hebOnly(s){ return (s||'').replace(/[^\u05D0-\u05EA]/g,''); }
+  function letterCounts(s){ const m={}; for(const ch of hebOnly(s)) m[ch]=(m[ch]||0)+1; return m; }
+  function letterCoverage(needle, hay){
+    let need=0, have=0;
+    for(const c in needle){ need+=needle[c]; have+=Math.min(needle[c], hay[c]||0); }
+    return need? have/need : 0;
+  }
+  const THERAPIST_INDEX = THERAPISTS.map(t=>({name:t, counts:letterCounts(t), len:hebOnly(t).length}));
+
+  function findTherapist(text){
+    const hay = letterCounts(text);
+    let best=null, bestScore=0;
+    for(const t of THERAPIST_INDEX){
+      const cov = letterCoverage(t.counts, hay);
+      const score = cov + t.len*0.0001; // tie-break toward longer (more specific) names
+      if(cov >= 0.85 && score > bestScore){ bestScore=score; best=t.name; }
+    }
+    return best;
+  }
+
+  const PDF_DATE_RE = /\d{2}\/\d{2}\/\d{4}/;
+
+  // Returns {therapist, patient, freq} or null
   function parsePdfRow(line){
-    let m = line.match(PDF_ROW_RE);
-    if(m){
-      return {
-        patient: m[2].trim(),
-        therapist: (m[4]+' '+m[5]).trim(),
-        freq: m[6]!==undefined ? Number(m[6]) : null
-      };
-    }
-    m = line.match(PDF_ROW_RE_REV);
-    if(m){
-      // therapist tokens appear reversed too — restore "first last"
-      return {
-        patient: m[6].trim(),
-        therapist: (m[4]+' '+m[3]).trim(),
-        freq: m[2]!==undefined ? Number(m[2]) : null
-      };
-    }
-    return null;
+    const dm = line.match(PDF_DATE_RE);
+    if(!dm || !/\b\d{2}:\d{2}\b/.test(line)) return null; // real data rows only
+    const therapist = findTherapist(line);
+    if(!therapist) return null;
+
+    const before = line.slice(0, dm.index);
+    const after  = line.slice(dm.index + dm[0].length);
+
+    let freq = null;
+    const fm = before.match(/(?:^|\s)([0-5])(?=\s|$)/) || after.match(/(?:^|\s)([0-5])(?=\s|$)/);
+    if(fm) freq = Number(fm[1]);
+
+    const clean = s => s.replace(/\b\d{2}:\d{2}(:\d{2})?\b/g,' ')
+                        .replace(/[\d\-]{5,}/g,' ')
+                        .replace(/(?:^|\s)[0-5](?=\s|$)/g,' ')
+                        .replace(/\s+/g,' ').trim();
+
+    const beforeHas = !!findTherapist(before);
+    const afterHas  = !!findTherapist(after);
+    let patient;
+    if(beforeHas && !afterHas) patient = clean(after);
+    else if(afterHas && !beforeHas) patient = clean(before);
+    else patient = clean(after) || clean(before);
+
+    if(!patient) return null;
+    return {therapist, patient, freq};
   }
 
   async function handlePickedPdf(e, inputEl){
@@ -842,8 +870,8 @@ window.addEventListener('unhandledrejection', function(e){
         const desc = rowItems.slice().sort((a,b)=>b.transform[4]-a.transform[4]).map(it=>it.str).join(' ');
         // pick whichever token order actually matches our expected row shape
         const ascT = asc.trim(), descT = desc.trim();
-        if(PDF_ROW_RE.test(ascT) || PDF_ROW_RE_REV.test(ascT)) allLines.push(asc);
-        else if(PDF_ROW_RE.test(descT) || PDF_ROW_RE_REV.test(descT)) allLines.push(desc);
+        if(parsePdfRow(ascT)) allLines.push(asc);
+        else if(parsePdfRow(descT)) allLines.push(desc);
         else allLines.push(asc); // keep as-is; will just be skipped by the parser (e.g. header/footer lines)
       });
     }
