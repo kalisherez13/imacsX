@@ -768,37 +768,47 @@ window.addEventListener('unhandledrejection', function(e){
   // Reversing the whole string restores both letter order and word order.
   // Latin-only names (e.g. "desiree baron") are already correct — leave them.
   function fixHebrewOrder(s){
-    if(!/[\u05D0-\u05EA]/.test(s)) return s;
-    return [...s].reverse().join('').replace(/\s+/g,' ').trim();
+    if(!/[\u05D0-\u05EA]/.test(s)) return s.replace(/[\u0001\s]+/g,' ').trim();
+    // Reverse, then turn the item-boundary markers back into real spaces.
+    return [...s].reverse().join('').replace(/[\u0001\s]+/g,' ').trim();
   }
 
   // Returns {therapist, patient, freq} or null
   function parsePdfRow(line){
-    const dm = line.match(PDF_DATE_RE);
-    if(!dm || !/\b\d{2}:\d{2}\b/.test(line)) return null; // real data rows only
-    const therapist = findTherapist(line);
+    // Treat the item-boundary marker as whitespace for matching purposes,
+    // but keep it inside the patient text so word breaks survive reversal.
+    const SEPC = '\u0001';
+    const flat = line.split(SEPC).join(' ');
+
+    const dm = flat.match(PDF_DATE_RE);
+    if(!dm || !/\b\d{2}:\d{2}\b/.test(flat)) return null; // real data rows only
+    const therapist = findTherapist(flat);
     if(!therapist) return null;
 
-    const before = line.slice(0, dm.index);
-    const after  = line.slice(dm.index + dm[0].length);
+    // Split the ORIGINAL (marker-preserving) line at the same date position
+    const dIdxOrig = line.split(SEPC).join(' ').indexOf(dm[0]);
+    const before = line.slice(0, dIdxOrig);
+    const after  = line.slice(dIdxOrig + dm[0].length);
 
     let freq = null;
-    const fm = before.match(/(?:^|\s)([0-5])(?=\s|$)/) || after.match(/(?:^|\s)([0-5])(?=\s|$)/);
+    const beforeFlat = before.split(SEPC).join(' ');
+    const afterFlat  = after.split(SEPC).join(' ');
+    const fm = beforeFlat.match(/(?:^|\s)([0-5])(?=\s|$)/) || afterFlat.match(/(?:^|\s)([0-5])(?=\s|$)/);
     if(fm) freq = Number(fm[1]);
 
     const clean = s => s.replace(/\b\d{2}:\d{2}(:\d{2})?\b/g,' ')
                         .replace(/[\d\-]{5,}/g,' ')
-                        .replace(/(?:^|\s)[0-5](?=\s|$)/g,' ')
-                        .replace(/\s+/g,' ').trim();
+                        .replace(new RegExp('(?:^|[\\s'+SEPC+'])[0-5](?=[\\s'+SEPC+']|$)','g'),' ')
+                        .replace(/[ \t]+/g,' ').trim();
 
-    const beforeHas = !!findTherapist(before);
-    const afterHas  = !!findTherapist(after);
+    const beforeHas = !!findTherapist(beforeFlat);
+    const afterHas  = !!findTherapist(afterFlat);
     let patient;
     if(beforeHas && !afterHas) patient = clean(after);
     else if(afterHas && !beforeHas) patient = clean(before);
     else patient = clean(after) || clean(before);
 
-    if(!patient) return null;
+    if(!patient || !patient.replace(new RegExp(SEPC,'g'),'').trim()) return null;
     return {therapist, patient: fixHebrewOrder(patient), freq};
   }
 
@@ -874,8 +884,11 @@ window.addEventListener('unhandledrejection', function(e){
       const ys = Array.from(rows.keys()).sort((a,b)=>b-a); // top to bottom
       ys.forEach(y=>{
         const rowItems = rows.get(y);
-        const asc = rowItems.slice().sort((a,b)=>a.transform[4]-b.transform[4]).map(it=>it.str).join(' ');
-        const desc = rowItems.slice().sort((a,b)=>b.transform[4]-a.transform[4]).map(it=>it.str).join(' ');
+        // Join with a marker (not a plain space) so item boundaries survive the
+        // RTL reversal later — otherwise "זלוטניק" + "עודדה" glue together.
+        const SEP = '\u0001';
+        const asc = rowItems.slice().sort((a,b)=>a.transform[4]-b.transform[4]).map(it=>it.str.trim()).filter(Boolean).join(SEP);
+        const desc = rowItems.slice().sort((a,b)=>b.transform[4]-a.transform[4]).map(it=>it.str.trim()).filter(Boolean).join(SEP);
         // pick whichever token order actually matches our expected row shape
         const ascT = asc.trim(), descT = desc.trim();
         if(parsePdfRow(ascT)) allLines.push(asc);
