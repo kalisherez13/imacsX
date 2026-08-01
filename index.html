@@ -860,7 +860,7 @@ window.addEventListener('unhandledrejection', function(e){
     const rowsOut=[];
     for(let i=1;i<=pdf.numPages;i++){
       const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
+      const content = await page.getTextContent({disableCombineTextItems: true});
       // group text items into physical lines by y-coordinate
       const lines = new Map();
       content.items.forEach(it=>{
