@@ -877,26 +877,22 @@ window.addEventListener('unhandledrejection', function(e){
         // Sort right-to-left (descending x) — the reading order of this report.
         const glyphs = lines.get(y).slice().sort((a,b)=>b.transform[4]-a.transform[4]);
 
-        // Typical glyph advance on this line, used as the gap threshold.
-        const advances=[];
-        for(let k=0;k<glyphs.length-1;k++){
-          const d = glyphs[k].transform[4] - glyphs[k+1].transform[4];
-          if(d>0) advances.push(d);
-        }
-        advances.sort((a,b)=>a-b);
-        const typical = advances.length ? advances[Math.floor(advances.length/2)] : 6;
-        const gapLimit = typical * 1.8;
+        // Measured on real reports: glyphs inside a word sit ~0 units apart,
+        // while a word/column break leaves a blank of ~20-40 units.
+        const GAP = 5;
 
         const toks=[];
         let cur='';
         for(let k=0;k<glyphs.length;k++){
-          const ch = glyphs[k].str;
+          const g = glyphs[k];
+          const ch = g.str;
           if(/^\s+$/.test(ch)){ if(cur){ toks.push(cur); cur=''; } continue; }
           cur += ch;
           const next = glyphs[k+1];
           if(next){
-            const gap = glyphs[k].transform[4] - next.transform[4];
-            if(gap > gapLimit){ toks.push(cur); cur=''; }
+            // blank space between this glyph's left edge and the next glyph's right edge
+            const blank = g.transform[4] - (next.transform[4] + (next.width||0));
+            if(blank > GAP){ toks.push(cur); cur=''; }
           }
         }
         if(cur) toks.push(cur);
