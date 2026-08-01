@@ -737,8 +737,34 @@ window.addEventListener('unhandledrejection', function(e){
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
 
-  // Row format (after the header): <phone> <patient name...> <dd/mm/yyyy> <therapist first> <therapist last> [freq 0-5] <HH:MM>
+  // The same report can come out of pdf.js in two token orders depending on how
+  // the bidirectional Hebrew text is laid out. Support both.
+  // Forward:  <phone> <patient> <dd/mm/yyyy> <therapist first> <therapist last> [freq] <HH:MM>
   const PDF_ROW_RE = /^(\S+)\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\S+)\s+(\S+)\s+(?:(\d)\s+)?(\d{2}:\d{2})$/;
+  // Reversed: <HH:MM> [freq] <therapist last> <therapist first> <dd/mm/yyyy> <patient> <phone>
+  const PDF_ROW_RE_REV = /^(\d{2}:\d{2})\s+(?:(\d)\s+)?(\S+)\s+(\S+)\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+(\S+)$/;
+
+  // Returns {patient, therapist, freq} or null
+  function parsePdfRow(line){
+    let m = line.match(PDF_ROW_RE);
+    if(m){
+      return {
+        patient: m[2].trim(),
+        therapist: (m[4]+' '+m[5]).trim(),
+        freq: m[6]!==undefined ? Number(m[6]) : null
+      };
+    }
+    m = line.match(PDF_ROW_RE_REV);
+    if(m){
+      // therapist tokens appear reversed too — restore "first last"
+      return {
+        patient: m[6].trim(),
+        therapist: (m[4]+' '+m[3]).trim(),
+        freq: m[2]!==undefined ? Number(m[2]) : null
+      };
+    }
+    return null;
+  }
 
   async function handlePickedPdf(e, inputEl){
     const file=e.target.files[0];
@@ -762,14 +788,11 @@ window.addEventListener('unhandledrejection', function(e){
       lines.forEach(line=>{
         const trimmed=line.trim();
         if(!trimmed) return;
-        const m = trimmed.match(PDF_ROW_RE);
-        if(!m) return;
+        const parsed = parsePdfRow(trimmed);
+        if(!parsed) return;
         matchedRows++;
-        const patientName = m[2].trim();
-        const therapist = (m[4]+' '+m[5]).trim();
-        const freq = m[6]!==undefined ? Number(m[6]) : null;
-        if(!columnsMap.has(therapist)) columnsMap.set(therapist, []);
-        columnsMap.get(therapist).push({name:patientName, recommended:freq});
+        if(!columnsMap.has(parsed.therapist)) columnsMap.set(parsed.therapist, []);
+        columnsMap.get(parsed.therapist).push({name:parsed.patient, recommended:parsed.freq});
       });
       hideModal();
       if(matchedRows===0){
@@ -818,8 +841,9 @@ window.addEventListener('unhandledrejection', function(e){
         const asc = rowItems.slice().sort((a,b)=>a.transform[4]-b.transform[4]).map(it=>it.str).join(' ');
         const desc = rowItems.slice().sort((a,b)=>b.transform[4]-a.transform[4]).map(it=>it.str).join(' ');
         // pick whichever token order actually matches our expected row shape
-        if(PDF_ROW_RE.test(asc.trim())) allLines.push(asc);
-        else if(PDF_ROW_RE.test(desc.trim())) allLines.push(desc);
+        const ascT = asc.trim(), descT = desc.trim();
+        if(PDF_ROW_RE.test(ascT) || PDF_ROW_RE_REV.test(ascT)) allLines.push(asc);
+        else if(PDF_ROW_RE.test(descT) || PDF_ROW_RE_REV.test(descT)) allLines.push(desc);
         else allLines.push(asc); // keep as-is; will just be skipped by the parser (e.g. header/footer lines)
       });
     }
