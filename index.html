@@ -308,7 +308,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 13</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 14</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -558,6 +558,14 @@ window.addEventListener('unhandledrejection', function(e){
     els.board.appendChild(addBtn);
   }
 
+  // A patient is incomplete if no frequency was chosen, or if they were flagged
+  // with an asterisk (*) but no explanation was written in the free-text note.
+  function isIncomplete(p){
+    if(p.freq===null || p.freq===undefined) return true;
+    if(p.pending==='*' && !(p.note||'').trim()) return true;
+    return false;
+  }
+
   function renderColumn(col){
     const wrap=document.createElement('div');
     wrap.className='column'+(col.done?' done':'');
@@ -608,12 +616,17 @@ window.addEventListener('unhandledrejection', function(e){
         return;
       }
       // A patient counts as filled once an actual frequency was chosen.
-      const missing = col.patients.filter(p=>p.freq===null || p.freq===undefined);
+      const missing = col.patients.filter(isIncomplete);
       if(missing.length){
         col.showMissing = true;   // highlight the empty ones in red
         col.done = false;
         scheduleSave(); render();
-        showToast(`⚠️ נותרו ${missing.length} מטופלים ללא תדירות`);
+        const noFreq = missing.filter(p=>p.freq===null||p.freq===undefined).length;
+        const noNote = missing.length - noFreq;
+        const parts=[];
+        if(noFreq) parts.push(`${noFreq} ללא תדירות`);
+        if(noNote) parts.push(`${noNote} עם * ללא הסבר`);
+        showToast('⚠️ נותרו: '+parts.join(', '));
       }else{
         col.showMissing = false;
         col.done = true;
@@ -628,7 +641,7 @@ window.addEventListener('unhandledrejection', function(e){
 
   function renderPatient(col,p){
     const box=document.createElement('div');
-    const isMissing = col.showMissing && (p.freq===null || p.freq===undefined);
+    const isMissing = col.showMissing && isIncomplete(p);
     box.className='patient'+(isMissing?' missing':'');
 
     const head=document.createElement('div');
@@ -717,7 +730,7 @@ window.addEventListener('unhandledrejection', function(e){
       b.onclick=()=>{
         p.freq=(p.freq===val? null : val);
         // If everything is filled now, drop the red highlighting automatically.
-        if(col.showMissing && !col.patients.some(x=>x.freq===null || x.freq===undefined)){
+        if(col.showMissing && !col.patients.some(isIncomplete)){
           col.showMissing=false;
         }
         scheduleSave(); render();
@@ -742,7 +755,11 @@ window.addEventListener('unhandledrejection', function(e){
       b.className='pending-btn'+(p.pending===n?' sel':'')+(n==='*'?' force-red':'');
       b.textContent=n;
       b.title = n==='*' ? 'סימון חריג — מסמן את השורה באדום בדוח' : '';
-      b.onclick=()=>{ p.pending=(p.pending===n? null : n); scheduleSave(); render(); };
+      b.onclick=()=>{
+        p.pending=(p.pending===n? null : n);
+        if(col.showMissing && !col.patients.some(isIncomplete)){ col.showMissing=false; }
+        scheduleSave(); render();
+      };
       pendingBtns.appendChild(b);
     });
     pendingRow.appendChild(pendingLbl);
@@ -757,10 +774,24 @@ window.addEventListener('unhandledrejection', function(e){
     box.appendChild(pendingRow);
 
     const note=document.createElement('input');
-    note.className='note-input'+(mismatch?' needs-note':'');
-    note.placeholder = mismatch ? '⚠️ נדרש הסבר על אי ההתאמה' : 'הערה (לא חובה)';
+    const noteRequired = (p.pending==='*');
+    const noteMissing = noteRequired && !(p.note||'').trim();
+    note.className='note-input'+((mismatch||noteMissing)?' needs-note':'');
+    note.placeholder = noteMissing ? '⚠️ חובה: הסבירו את הסימון *'
+                     : noteRequired ? 'הסבר לסימון *'
+                     : mismatch ? '⚠️ נדרש הסבר על אי ההתאמה'
+                     : 'הערה (לא חובה)';
     note.value=p.note||'';
-    note.oninput=()=>{ p.note=note.value; scheduleSave(); };
+    note.oninput=()=>{
+      p.note=note.value;
+      const wasBlocking = col.showMissing;
+      if(wasBlocking && !col.patients.some(isIncomplete)){
+        col.showMissing=false;
+        scheduleSave(); render();
+        return;
+      }
+      scheduleSave();
+    };
     box.appendChild(note);
 
     return box;
