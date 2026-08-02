@@ -97,7 +97,29 @@
     display:flex;flex-direction:column;
     overflow:hidden;
   }
-  .column.done{border-color:var(--teal);box-shadow:0 0 0 2px rgba(47,143,130,.25);}
+  .column.done{
+    border-color:var(--teal);
+    box-shadow:0 0 0 3px var(--teal), 0 6px 18px rgba(47,143,130,.35);
+    background:#eefaf7;
+  }
+  .column.done .patient{background:#dff2ec;}
+  .column.done::after{
+    content:'✔ הושלם';
+    display:block;text-align:center;background:var(--teal);color:#fff;
+    font-family:'Rubik',sans-serif;font-weight:700;font-size:12px;padding:4px;
+  }
+
+  .patient.missing{
+    background:var(--red-bg);
+    border:2px solid var(--red);
+    box-shadow:0 0 0 3px rgba(193,69,69,.25);
+    animation:missingPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes missingPulse{
+    0%,100%{box-shadow:0 0 0 3px rgba(193,69,69,.25);}
+    50%{box-shadow:0 0 0 6px rgba(193,69,69,.10);}
+  }
+  .patient.missing .pname{color:var(--red);font-weight:700;}
   .col-tab{
     background:var(--ink);color:#fff;padding:10px 12px;
     display:flex;align-items:center;justify-content:space-between;gap:6px;
@@ -286,7 +308,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 12</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 13</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -577,7 +599,27 @@ window.addEventListener('unhandledrejection', function(e){
     const finishBtn=document.createElement('button');
     finishBtn.className='btn finish-btn '+(col.done?'btn-outline':'btn-primary');
     finishBtn.textContent = col.done? '✔ הושלם — ללחיצה לעריכה' : 'סיימתי למלא ✓';
-    finishBtn.onclick=()=>{ col.done=!col.done; scheduleSave(); render(); };
+    finishBtn.onclick=()=>{
+      if(col.done){
+        // Re-open for editing
+        col.done=false;
+        col.showMissing=false;
+        scheduleSave(); render();
+        return;
+      }
+      // A patient counts as filled once an actual frequency was chosen.
+      const missing = col.patients.filter(p=>p.freq===null || p.freq===undefined);
+      if(missing.length){
+        col.showMissing = true;   // highlight the empty ones in red
+        col.done = false;
+        scheduleSave(); render();
+        showToast(`⚠️ נותרו ${missing.length} מטופלים ללא תדירות`);
+      }else{
+        col.showMissing = false;
+        col.done = true;
+        scheduleSave(); render();
+      }
+    };
     footer.appendChild(finishBtn);
     wrap.appendChild(footer);
 
@@ -586,7 +628,8 @@ window.addEventListener('unhandledrejection', function(e){
 
   function renderPatient(col,p){
     const box=document.createElement('div');
-    box.className='patient';
+    const isMissing = col.showMissing && (p.freq===null || p.freq===undefined);
+    box.className='patient'+(isMissing?' missing':'');
 
     const head=document.createElement('div');
     head.className='patient-head';
@@ -671,7 +714,14 @@ window.addEventListener('unhandledrejection', function(e){
         if(val==='R'){ b.classList.add('special'); }
         else{ b.classList.add(comparable ? (mismatch?'mismatch':'match') : 'neutral'); }
       }
-      b.onclick=()=>{ p.freq=(p.freq===val? null : val); scheduleSave(); render(); };
+      b.onclick=()=>{
+        p.freq=(p.freq===val? null : val);
+        // If everything is filled now, drop the red highlighting automatically.
+        if(col.showMissing && !col.patients.some(x=>x.freq===null || x.freq===undefined)){
+          col.showMissing=false;
+        }
+        scheduleSave(); render();
+      };
       actRow.appendChild(b);
     });
     actCol.appendChild(actRow); actCol.appendChild(actLbl);
@@ -719,7 +769,7 @@ window.addEventListener('unhandledrejection', function(e){
   function addColumn(){
     if(!day) day = emptyDay(fmtDateKey(currentDate));
     if(!Array.isArray(day.columns)) day.columns = [];
-    day.columns.push({id:uid(), therapist:'', done:false, patients:[{id:uid(),name:'',freq:null,recommended:2,pending:null,note:''}]});
+    day.columns.push({id:uid(), therapist:'', done:false, showMissing:false, patients:[{id:uid(),name:'',freq:null,recommended:2,pending:null,note:''}]});
     scheduleSave();
   }
 
@@ -1135,7 +1185,7 @@ window.addEventListener('unhandledrejection', function(e){
     const recOf = (p)=> (p.recommended!==null && p.recommended!==undefined) ? p.recommended : recommendedDefault;
     if(mode==='replace'){
       day.columns = extractedColumns.map(c=>({
-        id:uid(), therapist:c.therapist||'', done:false,
+        id:uid(), therapist:c.therapist||'', done:false, showMissing:false,
         patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,note:''}))
       }));
     }else{
@@ -1150,7 +1200,7 @@ window.addEventListener('unhandledrejection', function(e){
           });
         }else{
           day.columns.push({
-            id:uid(), therapist:c.therapist||'', done:false,
+            id:uid(), therapist:c.therapist||'', done:false, showMissing:false,
             patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,note:''}))
           });
         }
