@@ -130,6 +130,12 @@
     font-weight:700;font-size:14.5px;width:100%;padding:2px 0;
   }
   .col-tab input:focus{outline:none;border-bottom:1px solid rgba(255,255,255,.5);}
+  .col-count{
+    background:rgba(255,255,255,.18);color:#fff;
+    font-family:'Rubik',sans-serif;font-weight:700;font-size:11.5px;
+    padding:2px 7px;border-radius:10px;white-space:nowrap;flex:0 0 auto;
+  }
+  .column.done .col-count{background:rgba(255,255,255,.3);}
   .col-tab .del-col{background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-size:15px;padding:2px 4px;}
   .col-tab .del-col:hover{color:#fff;}
 
@@ -165,6 +171,7 @@
     text-align-last:center;padding:0;
   }
   .freq-square.rec{border:1px dashed var(--ink-soft);color:var(--ink-soft);background:var(--paper);}
+  .freq-square.rec.locked{opacity:.75;cursor:not-allowed;background:#e6e9ee;}
   .note-input.needs-note{border-color:var(--red);background:var(--red-bg);}
 
   .act-freq-row{display:flex;gap:4px;}
@@ -308,7 +315,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 14</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 16</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -323,6 +330,7 @@
     <input type="file" id="pdfInput" style="display:none;">
     <button class="btn btn-ghost" id="pdfBtn">📄 ייבוא מקובץ PDF תדירות</button>
     <button class="btn btn-primary" id="printBtn">🖨️ הפקת PDF מחולק</button>
+    <button class="btn btn-ghost" id="roleBtn">🔑 מצב</button>
   </div>
 </div>
 
@@ -355,6 +363,15 @@ const firebaseConfig = {
   appId: "1:219583611465:web:e4217fe6ec01e47dd93598"
 };
 const FIREBASE_READY = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY_HERE";
+
+// ============================================================
+// MANAGER MODE — only a manager may change the RECOMMENDED frequency.
+// Everyone else uses the tool normally as staff. Change this password freely.
+// NOTE: this is a convenience lock (client-side), not real security.
+// ============================================================
+const MANAGER_PASSWORD = "imacs-manager";
+let IS_MANAGER = false;
+try { IS_MANAGER = localStorage.getItem('imacs_role') === 'manager'; } catch(e) {}
 
 let fbAuth=null, fbDb=null, fbAuthReady=null;
 if(FIREBASE_READY){
@@ -399,6 +416,7 @@ window.addEventListener('unhandledrejection', function(e){
     pdfInput:document.getElementById('pdfInput'),
     pdfBtn:document.getElementById('pdfBtn'),
     printBtn:document.getElementById('printBtn'),
+    roleBtn:document.getElementById('roleBtn'),
     printSheet:document.getElementById('printSheet'),
     toast:document.getElementById('toast'),
   };
@@ -558,12 +576,18 @@ window.addEventListener('unhandledrejection', function(e){
     els.board.appendChild(addBtn);
   }
 
-  // A patient is incomplete if no frequency was chosen, or if they were flagged
-  // with an asterisk (*) but no explanation was written in the free-text note.
+  // A patient counts as filled if EITHER an actual frequency (circle) was chosen
+  // OR a pending count (square 1/2/3) was marked.
+  // The one blocking case: an asterisk (*) with nothing else and no explanation.
   function isIncomplete(p){
-    if(p.freq===null || p.freq===undefined) return true;
-    if(p.pending==='*' && !(p.note||'').trim()) return true;
-    return false;
+    const hasFreq    = !(p.freq===null || p.freq===undefined);
+    const hasSquare  = (p.pending!==null && p.pending!==undefined && p.pending!=='*');
+    const hasStar    = (p.pending==='*');
+    const hasNote    = !!(p.note||'').trim();
+
+    if(hasStar && !hasFreq && !hasNote) return true; // star alone with no reason
+    if(hasFreq || hasSquare || hasStar) return false;
+    return true; // nothing filled at all
   }
 
   function renderColumn(col){
@@ -585,7 +609,12 @@ window.addEventListener('unhandledrejection', function(e){
         scheduleSave(); render();
       }
     };
-    tab.appendChild(nameInput); tab.appendChild(delColBtn);
+    const countBadge=document.createElement('span');
+    countBadge.className='col-count';
+    const filled = col.patients.filter(p=>!isIncomplete(p)).length;
+    countBadge.textContent = filled+'/'+col.patients.length;
+    countBadge.title = 'מולאו '+filled+' מתוך '+col.patients.length+' מטופלים';
+    tab.appendChild(nameInput); tab.appendChild(countBadge); tab.appendChild(delColBtn);
     wrap.appendChild(tab);
 
     const plist=document.createElement('div');
@@ -621,11 +650,11 @@ window.addEventListener('unhandledrejection', function(e){
         col.showMissing = true;   // highlight the empty ones in red
         col.done = false;
         scheduleSave(); render();
-        const noFreq = missing.filter(p=>p.freq===null||p.freq===undefined).length;
-        const noNote = missing.length - noFreq;
+        const starNoReason = missing.filter(p=>p.pending==='*').length;
+        const empty = missing.length - starNoReason;
         const parts=[];
-        if(noFreq) parts.push(`${noFreq} ללא תדירות`);
-        if(noNote) parts.push(`${noNote} עם * ללא הסבר`);
+        if(empty) parts.push(`${empty} ריקים`);
+        if(starNoReason) parts.push(`${starNoReason} עם * ללא הסבר`);
         showToast('⚠️ נותרו: '+parts.join(', '));
       }else{
         col.showMissing = false;
@@ -691,7 +720,8 @@ window.addEventListener('unhandledrejection', function(e){
     const recLbl=document.createElement('div');
     recLbl.className='freq-col-label'; recLbl.textContent='מומלץ';
     const recSel=document.createElement('select');
-    recSel.className='freq-square rec';
+    recSel.className='freq-square rec'+(IS_MANAGER?'':' locked');
+    if(!IS_MANAGER) recSel.disabled = true;
     const noneOpt=document.createElement('option');
     noneOpt.value=''; noneOpt.textContent='-';
     recSel.appendChild(noneOpt);
@@ -702,7 +732,11 @@ window.addEventListener('unhandledrejection', function(e){
       recSel.appendChild(o);
     });
     if(p.recommended===null || p.recommended===undefined) noneOpt.selected=true;
-    recSel.onchange=()=>{ p.recommended = recSel.value===''? null : Number(recSel.value); scheduleSave(); render(); };
+    recSel.onchange=()=>{
+      if(!IS_MANAGER){ showToast('🔒 רק מנהל יכול לשנות תדירות מומלצת'); render(); return; }
+      p.recommended = recSel.value===''? null : Number(recSel.value);
+      scheduleSave(); render();
+    };
     recCol.appendChild(recSel); recCol.appendChild(recLbl);
 
     // "Actual" is a row of tap buttons: 0,1,2,3,4,R
@@ -812,6 +846,32 @@ window.addEventListener('unhandledrejection', function(e){
   els.cameraInput.onchange=(e)=>handlePickedFile(e, els.cameraInput);
   els.galleryInput.onchange=(e)=>handlePickedFile(e, els.galleryInput);
   els.pdfBtn.onclick=()=>els.pdfInput.click();
+
+  function refreshRoleBtn(){
+    els.roleBtn.textContent = IS_MANAGER ? '🔓 מנהל' : '🔒 צוות';
+    els.roleBtn.title = IS_MANAGER ? 'לחצו כדי לחזור למצב צוות' : 'לחצו כדי להיכנס כמנהל';
+  }
+  refreshRoleBtn();
+
+  els.roleBtn.onclick=()=>{
+    if(IS_MANAGER){
+      IS_MANAGER=false;
+      try{ localStorage.setItem('imacs_role','staff'); }catch(e){}
+      refreshRoleBtn(); render();
+      showToast('חזרת למצב צוות');
+      return;
+    }
+    const pw = prompt('סיסמת מנהל:');
+    if(pw===null) return;
+    if(pw===MANAGER_PASSWORD){
+      IS_MANAGER=true;
+      try{ localStorage.setItem('imacs_role','manager'); }catch(e){}
+      refreshRoleBtn(); render();
+      showToast('✅ נכנסת כמנהל — אפשר לערוך תדירות מומלצת');
+    }else{
+      showToast('סיסמה שגויה');
+    }
+  };
   els.pdfInput.onchange=(e)=>handlePickedPdf(e, els.pdfInput);
 
   if(typeof pdfjsLib !== 'undefined'){
