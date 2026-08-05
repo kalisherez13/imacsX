@@ -194,7 +194,8 @@
     font-family:'Rubik',sans-serif;padding:0;
   }
   .pending-btn.sel{background:var(--amber);color:#fff;border-color:var(--amber);}
-  .pending-btn.sel.force-red{background:var(--red);color:#fff;border-color:var(--red);}
+  .pending-btn.star{margin-inline-start:6px;font-size:15px;line-height:1;}
+  .pending-btn.star.sel{background:var(--red);color:#fff;border-color:var(--red);}
   .freq-col.act-pending{background:var(--amber-bg);border-radius:8px;padding:4px;}
   .pending-progress{font-size:11.5px;font-weight:700;color:var(--amber);margin-inline-start:4px;}
 
@@ -315,7 +316,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 16</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 18</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -330,6 +331,9 @@
     <input type="file" id="pdfInput" style="display:none;">
     <button class="btn btn-ghost" id="pdfBtn">📄 ייבוא מקובץ PDF תדירות</button>
     <button class="btn btn-primary" id="printBtn">🖨️ הפקת PDF מחולק</button>
+    <button class="btn btn-ghost mgr-only" id="remindBtn">💬 תזכורת</button>
+    <button class="btn btn-ghost mgr-only" id="weekBtn">📊 סיכום שבועי</button>
+    <button class="btn btn-ghost mgr-only" id="staffBtn">👩‍⚕️ מטפלים</button>
     <button class="btn btn-ghost" id="roleBtn">🔑 מצב</button>
   </div>
 </div>
@@ -417,6 +421,9 @@ window.addEventListener('unhandledrejection', function(e){
     pdfBtn:document.getElementById('pdfBtn'),
     printBtn:document.getElementById('printBtn'),
     roleBtn:document.getElementById('roleBtn'),
+    remindBtn:document.getElementById('remindBtn'),
+    weekBtn:document.getElementById('weekBtn'),
+    staffBtn:document.getElementById('staffBtn'),
     printSheet:document.getElementById('printSheet'),
     toast:document.getElementById('toast'),
   };
@@ -539,6 +546,12 @@ window.addEventListener('unhandledrejection', function(e){
     // Safety net: a null/malformed day must never crash the app
     if(!day || typeof day !== 'object') day = emptyDay(fmtDateKey(currentDate));
     if(!Array.isArray(day.columns)) day.columns = [];
+    // Migrate older records where the asterisk lived inside `pending`
+    day.columns.forEach(c=>{
+      (c.patients||[]).forEach(p=>{
+        if(p.pending==='*'){ p.star = true; p.pending = null; }
+      });
+    });
     renderStatusStrip();
     renderBoard();
   }
@@ -580,12 +593,13 @@ window.addEventListener('unhandledrejection', function(e){
   // OR a pending count (square 1/2/3) was marked.
   // The one blocking case: an asterisk (*) with nothing else and no explanation.
   function isIncomplete(p){
-    const hasFreq    = !(p.freq===null || p.freq===undefined);
-    const hasSquare  = (p.pending!==null && p.pending!==undefined && p.pending!=='*');
-    const hasStar    = (p.pending==='*');
-    const hasNote    = !!(p.note||'').trim();
+    const hasFreq   = !(p.freq===null || p.freq===undefined);
+    const hasSquare = (p.pending!==null && p.pending!==undefined);
+    const hasStar   = !!p.star;
+    const hasNote   = !!(p.note||'').trim();
 
-    if(hasStar && !hasFreq && !hasNote) return true; // star alone with no reason
+    // A star ALWAYS requires a written explanation, whatever else is marked.
+    if(hasStar && !hasNote) return true;
     if(hasFreq || hasSquare || hasStar) return false;
     return true; // nothing filled at all
   }
@@ -626,7 +640,7 @@ window.addEventListener('unhandledrejection', function(e){
     addP.className='add-patient';
     addP.textContent='➕ הוספת מטופל';
     addP.onclick=()=>{
-      col.patients.push({id:uid(),name:'',freq:null,recommended:2,pending:null,note:''});
+      col.patients.push({id:uid(),name:'',freq:null,recommended:2,pending:null,star:false,note:''});
       scheduleSave(); render();
     };
     wrap.appendChild(addP);
@@ -650,7 +664,7 @@ window.addEventListener('unhandledrejection', function(e){
         col.showMissing = true;   // highlight the empty ones in red
         col.done = false;
         scheduleSave(); render();
-        const starNoReason = missing.filter(p=>p.pending==='*').length;
+        const starNoReason = missing.filter(p=>p.star).length;
         const empty = missing.length - starNoReason;
         const parts=[];
         if(empty) parts.push(`${empty} ריקים`);
@@ -784,11 +798,10 @@ window.addEventListener('unhandledrejection', function(e){
     pendingLbl.textContent='עוד לקבוע השבוע:';
     const pendingBtns=document.createElement('div');
     pendingBtns.className='pending-btns';
-    [1,2,3,'*'].forEach(n=>{
+    [1,2,3].forEach(n=>{
       const b=document.createElement('button');
-      b.className='pending-btn'+(p.pending===n?' sel':'')+(n==='*'?' force-red':'');
+      b.className='pending-btn'+(p.pending===n?' sel':'');
       b.textContent=n;
-      b.title = n==='*' ? 'סימון חריג — מסמן את השורה באדום בדוח' : '';
       b.onclick=()=>{
         p.pending=(p.pending===n? null : n);
         if(col.showMissing && !col.patients.some(isIncomplete)){ col.showMissing=false; }
@@ -796,9 +809,20 @@ window.addEventListener('unhandledrejection', function(e){
       };
       pendingBtns.appendChild(b);
     });
+    // Independent asterisk — can be combined with a circle and/or a square.
+    const starBtn=document.createElement('button');
+    starBtn.className='pending-btn star'+(p.star?' sel':'');
+    starBtn.textContent='*';
+    starBtn.title='סימון חריג — תמיד מחייב הסבר, ומסמן את השורה באדום בדוח';
+    starBtn.onclick=()=>{
+      p.star = !p.star;
+      if(col.showMissing && !col.patients.some(isIncomplete)){ col.showMissing=false; }
+      scheduleSave(); render();
+    };
+    pendingBtns.appendChild(starBtn);
     pendingRow.appendChild(pendingLbl);
     pendingRow.appendChild(pendingBtns);
-    if(p.pending!==null && p.pending!==undefined && p.pending!=='*'){
+    if(p.pending!==null && p.pending!==undefined){
       actCol.classList.add('act-pending');
       const progress=document.createElement('span');
       progress.className='pending-progress';
@@ -808,7 +832,7 @@ window.addEventListener('unhandledrejection', function(e){
     box.appendChild(pendingRow);
 
     const note=document.createElement('input');
-    const noteRequired = (p.pending==='*');
+    const noteRequired = !!p.star;
     const noteMissing = noteRequired && !(p.note||'').trim();
     note.className='note-input'+((mismatch||noteMissing)?' needs-note':'');
     note.placeholder = noteMissing ? '⚠️ חובה: הסבירו את הסימון *'
@@ -834,7 +858,7 @@ window.addEventListener('unhandledrejection', function(e){
   function addColumn(){
     if(!day) day = emptyDay(fmtDateKey(currentDate));
     if(!Array.isArray(day.columns)) day.columns = [];
-    day.columns.push({id:uid(), therapist:'', done:false, showMissing:false, patients:[{id:uid(),name:'',freq:null,recommended:2,pending:null,note:''}]});
+    day.columns.push({id:uid(), therapist:'', done:false, showMissing:false, patients:[{id:uid(),name:'',freq:null,recommended:2,pending:null,star:false,note:''}]});
     scheduleSave();
   }
 
@@ -850,6 +874,9 @@ window.addEventListener('unhandledrejection', function(e){
   function refreshRoleBtn(){
     els.roleBtn.textContent = IS_MANAGER ? '🔓 מנהל' : '🔒 צוות';
     els.roleBtn.title = IS_MANAGER ? 'לחצו כדי לחזור למצב צוות' : 'לחצו כדי להיכנס כמנהל';
+    document.querySelectorAll('.mgr-only').forEach(b=>{
+      b.style.display = IS_MANAGER ? '' : 'none';
+    });
   }
   refreshRoleBtn();
 
@@ -881,7 +908,12 @@ window.addEventListener('unhandledrejection', function(e){
   // Known clinic therapists. pdf.js scrambles Hebrew text badly, so instead of
   // parsing by position we identify the therapist by letter-coverage against this
   // list, and locate the patient relative to the date (which never gets garbled).
-  const THERAPISTS = ['ד"ר סאם חמיס','אופיר פינצי','ארז קליש','גיא הורוביץ','גלי נאמן','זהר אדר','יניב אגאייב','עופרי רכבוך','עמית בר','רוני בירן','עמית דודידוף'];
+  const DEFAULT_THERAPISTS = ['ד"ר סאם חמיס','אופיר פינצי','ארז קליש','גיא הורוביץ','גלי נאמן','זהר אדר','יניב אגאייב','עופרי רכבוך','עמית בר','רוני בירן','עמית דודידוף'];
+  let THERAPISTS = DEFAULT_THERAPISTS.slice();
+  try{
+    const saved = localStorage.getItem('imacs_therapists');
+    if(saved){ const arr=JSON.parse(saved); if(Array.isArray(arr) && arr.length) THERAPISTS = arr; }
+  }catch(e){}
 
   function hebOnly(s){ return (s||'').replace(/[^\u05D0-\u05EA]/g,''); }
   function letterCounts(s){ const m={}; for(const ch of hebOnly(s)) m[ch]=(m[ch]||0)+1; return m; }
@@ -890,7 +922,17 @@ window.addEventListener('unhandledrejection', function(e){
     for(const c in needle){ need+=needle[c]; have+=Math.min(needle[c], hay[c]||0); }
     return need? have/need : 0;
   }
-  const THERAPIST_INDEX = THERAPISTS.map(t=>({name:t, counts:letterCounts(t), len:hebOnly(t).length}));
+  let THERAPIST_INDEX = [];
+  function rebuildTherapistIndex(){
+    THERAPIST_INDEX = THERAPISTS.map(t=>({name:t, counts:letterCounts(t), len:hebOnly(t).length}));
+  }
+  rebuildTherapistIndex();
+
+  function setTherapists(list){
+    THERAPISTS = list;
+    rebuildTherapistIndex();
+    try{ localStorage.setItem('imacs_therapists', JSON.stringify(list)); }catch(e){}
+  }
 
   function findTherapist(text){
     const hay = letterCounts(text);
@@ -1277,7 +1319,7 @@ window.addEventListener('unhandledrejection', function(e){
     if(mode==='replace'){
       day.columns = extractedColumns.map(c=>({
         id:uid(), therapist:c.therapist||'', done:false, showMissing:false,
-        patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,note:''}))
+        patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:''}))
       }));
     }else{
       extractedColumns.forEach(c=>{
@@ -1286,13 +1328,13 @@ window.addEventListener('unhandledrejection', function(e){
         if(existing){
           (c.patients||[]).forEach(p=>{
             if(!existing.patients.some(x=>(x.name||'').trim()===p.name.trim())){
-              existing.patients.push({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,note:''});
+              existing.patients.push({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:''});
             }
           });
         }else{
           day.columns.push({
             id:uid(), therapist:c.therapist||'', done:false, showMissing:false,
-            patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,note:''}))
+            patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:''}))
           });
         }
       });
@@ -1407,6 +1449,153 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
     if(m) m.remove();
   }
 
+  // ---------- Manager: WhatsApp reminder ----------
+  els.remindBtn.onclick=()=>{
+    if(!IS_MANAGER) return;
+    if(!day || !day.columns || !day.columns.length){ showToast('אין נתונים ליום הזה'); return; }
+    const pending = day.columns.filter(c=>!c.done);
+    if(!pending.length){ showToast('🎉 כולם סיימו למלא!'); return; }
+
+    const lines = pending.map(c=>{
+      const left = c.patients.filter(isIncomplete).length;
+      const name = (c.therapist||'ללא שם');
+      return `• ${name} — נותרו ${left} מתוך ${c.patients.length}`;
+    });
+    const msg = `תזכורת מילוי תדירות — ${fmtDateLabel(currentDate)}\n\n`+
+                lines.join('\n')+
+                `\n\nנא להשלים את המילוי. תודה!`;
+
+    const m=document.createElement('div');
+    m.className='modal-bg no-print';
+    m.innerHTML=`
+      <div class="choice-modal" style="max-width:420px;">
+        <h3>תזכורת ל-${pending.length} מטפלים</h3>
+        <textarea id="remindText" style="width:100%;height:170px;padding:10px;border:1px solid var(--line);border-radius:8px;font-family:'Heebo',sans-serif;font-size:13px;direction:rtl;text-align:right;">${escapeHtml(msg)}</textarea>
+        <button class="btn btn-primary" id="waSend">💬 פתח בוואטסאפ</button>
+        <button class="btn btn-outline" id="copyMsg">📋 העתק טקסט</button>
+        <button class="btn btn-outline" id="closeRemind">סגירה</button>
+      </div>`;
+    document.body.appendChild(m);
+    document.getElementById('waSend').onclick=()=>{
+      const txt = document.getElementById('remindText').value;
+      window.open('https://wa.me/?text='+encodeURIComponent(txt), '_blank');
+    };
+    document.getElementById('copyMsg').onclick=async ()=>{
+      const txt = document.getElementById('remindText').value;
+      try{ await navigator.clipboard.writeText(txt); showToast('הועתק'); }
+      catch(e){ showToast('לא הצלחתי להעתיק — סמנו ידנית'); }
+    };
+    document.getElementById('closeRemind').onclick=()=>m.remove();
+  };
+
+  // ---------- Manager: weekly summary ----------
+  els.weekBtn.onclick=async ()=>{
+    if(!IS_MANAGER) return;
+    if(!FIREBASE_READY){ showToast('נדרש חיבור למסד הנתונים'); return; }
+    showModal();
+    try{
+      await fbAuthReady;
+      // Last 7 days ending on the currently viewed date
+      const days=[];
+      for(let i=6;i>=0;i--){
+        const d=new Date(currentDate); d.setDate(d.getDate()-i);
+        days.push(fmtDateKey(d));
+      }
+      const snaps = await Promise.all(days.map(k=>fbDb.collection('schedules').doc(k).get()));
+
+      const stats={};   // therapist -> {patients, mismatch, stars, pendingLeft, daysWorked}
+      let totalPatients=0, totalMismatch=0, totalStars=0;
+      snaps.forEach(sn=>{
+        if(!sn.exists) return;
+        const d=sn.data();
+        (d.columns||[]).forEach(c=>{
+          const t=(c.therapist||'ללא שם').trim();
+          if(!stats[t]) stats[t]={patients:0,mismatch:0,stars:0,pendingLeft:0,days:0};
+          stats[t].days++;
+          (c.patients||[]).forEach(p=>{
+            stats[t].patients++; totalPatients++;
+            const comparable=(p.recommended!==null&&p.recommended!==undefined&&p.freq!==null&&p.freq!==undefined);
+            if(comparable && p.freq!==p.recommended){ stats[t].mismatch++; totalMismatch++; }
+            if(p.star){ stats[t].stars++; totalStars++; }
+            if(p.pending!==null&&p.pending!==undefined) stats[t].pendingLeft++;
+          });
+        });
+      });
+
+      const names=Object.keys(stats).sort((a,b)=>stats[b].patients-stats[a].patients);
+      hideModal();
+      if(!names.length){ showModalError('אין נתונים בשבעת הימים האחרונים.'); return; }
+
+      const rows=names.map(n=>{
+        const st=stats[n];
+        const pct = st.patients? Math.round(st.mismatch/st.patients*100) : 0;
+        return `<tr>
+          <td style="text-align:right;">${escapeHtml(n)}</td>
+          <td>${st.days}</td>
+          <td>${st.patients}</td>
+          <td${st.mismatch?' style="color:#c14545;font-weight:700;"':''}>${st.mismatch} (${pct}%)</td>
+          <td${st.stars?' style="color:#c14545;font-weight:700;"':''}>${st.stars}</td>
+          <td>${st.pendingLeft}</td>
+        </tr>`;
+      }).join('');
+
+      const m=document.createElement('div');
+      m.className='modal-bg no-print';
+      m.innerHTML=`
+        <div class="crop-modal" style="max-width:640px;">
+          <h3>סיכום 7 ימים אחרונים</h3>
+          <p class="hint">${days[0]} — ${days[6]} · ${totalPatients} מטופלים · ${totalMismatch} אי-התאמות · ${totalStars} סימוני *</p>
+          <div style="max-height:55vh;overflow:auto;">
+            <style>
+              #weekTbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+              #weekTbl th,#weekTbl td{border:1px solid #ddd;padding:6px 8px;text-align:center;}
+              #weekTbl th{background:#f0f0f0;position:sticky;top:0;}
+            </style>
+            <table id="weekTbl">
+              <thead><tr><th>מטפל</th><th>ימים</th><th>מטופלים</th><th>אי-התאמות</th><th>סימוני *</th><th>עוד לקבוע</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <div class="crop-actions"><button class="btn btn-primary" id="closeWeek">סגירה</button></div>
+        </div>`;
+      document.body.appendChild(m);
+      document.getElementById('closeWeek').onclick=()=>m.remove();
+    }catch(err){
+      console.error(err);
+      showModalError('שגיאה בטעינת הסיכום: '+(err&&err.message?err.message:String(err)));
+    }
+  };
+
+  // ---------- Manager: edit therapist list ----------
+  els.staffBtn.onclick=()=>{
+    if(!IS_MANAGER) return;
+    const m=document.createElement('div');
+    m.className='modal-bg no-print';
+    m.innerHTML=`
+      <div class="choice-modal" style="max-width:420px;">
+        <h3>רשימת מטפלים</h3>
+        <p style="color:var(--ink-soft);font-size:12.5px;margin-top:-4px;">שם אחד בכל שורה. הרשימה משמשת לזיהוי אוטומטי בייבוא PDF.</p>
+        <textarea id="staffText" style="width:100%;height:200px;padding:10px;border:1px solid var(--line);border-radius:8px;font-family:'Heebo',sans-serif;font-size:13px;direction:rtl;text-align:right;">${escapeHtml(THERAPISTS.join('\n'))}</textarea>
+        <button class="btn btn-primary" id="saveStaff">שמירה</button>
+        <button class="btn btn-outline" id="resetStaff">איפוס לברירת מחדל</button>
+        <button class="btn btn-outline" id="closeStaff">ביטול</button>
+      </div>`;
+    document.body.appendChild(m);
+    document.getElementById('saveStaff').onclick=()=>{
+      const list=document.getElementById('staffText').value.split('\n').map(x=>x.trim()).filter(Boolean);
+      if(!list.length){ showToast('הרשימה לא יכולה להיות ריקה'); return; }
+      setTherapists(list);
+      m.remove();
+      showToast('✅ רשימת המטפלים עודכנה');
+    };
+    document.getElementById('resetStaff').onclick=()=>{
+      setTherapists(DEFAULT_THERAPISTS.slice());
+      m.remove();
+      showToast('הרשימה אופסה');
+    };
+    document.getElementById('closeStaff').onclick=()=>m.remove();
+  };
+
   // ---------- Print / split PDF ----------
   els.printBtn.onclick=()=>{
     if(!day || !day.columns || !day.columns.length){ showToast('אין עדיין נתונים ליום הזה'); return; }
@@ -1426,8 +1615,8 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
               const comparable=(p.recommended!==null && p.recommended!==undefined && p.freq!==null && p.freq!==undefined);
               const mismatch = comparable && p.freq!==p.recommended;
               const pendingSet = (p.pending!==null && p.pending!==undefined);
-              const forceRed = pendingSet && p.pending==='*';
-              const pendingNumeric = pendingSet && p.pending!=='*';
+              const forceRed = !!p.star;
+              const pendingNumeric = pendingSet;
               const isR = p.freq==='R';
 
               let rowClass='';
@@ -1435,13 +1624,12 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
               else if(isR) rowClass='r-row';
               else if(!pendingNumeric && mismatch) rowClass='mismatch-row';
 
+              // Base value: pending progress (1/2) takes priority, else the circle.
               let actualCell;
-              if(forceRed){
-                const baseVal = (p.freq===null||p.freq===undefined) ? '' : p.freq;
-                actualCell = `${baseVal}*`;
-              }
-              else if(pendingNumeric) actualCell=`${p.pending}/${(p.recommended!==null&&p.recommended!==undefined)?p.recommended:'-'}`;
+              if(pendingNumeric) actualCell=`${p.pending}/${(p.recommended!==null&&p.recommended!==undefined)?p.recommended:'-'}`;
               else actualCell=(p.freq===null||p.freq===undefined?'—':p.freq);
+              // A star is additive — it appends to whatever is already there.
+              if(forceRed) actualCell = (actualCell==='—' ? '*' : actualCell+'*');
 
               const actualCellClass = (!forceRed && pendingNumeric) ? ' class="pending-cell"' : '';
 
