@@ -174,7 +174,7 @@
   .freq-square.rec.locked{opacity:.75;cursor:not-allowed;background:#e6e9ee;}
   .note-input.needs-note{border-color:var(--red);background:var(--red-bg);}
 
-  .act-freq-row{display:flex;gap:4px;}
+  .act-freq-row{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end;max-width:210px;}
   .act-freq-btn{
     width:32px;height:32px;border-radius:50%;border:1px solid var(--line);
     background:#fff;font-weight:700;font-size:12.5px;cursor:pointer;color:var(--ink-soft);
@@ -184,6 +184,11 @@
   .act-freq-btn.sel.mismatch{background:var(--red);color:#fff;border-color:var(--red);}
   .act-freq-btn.sel.neutral{background:var(--ink);color:#fff;border-color:var(--ink);}
   .act-freq-btn.sel.special{background:#7b4fb0;color:#fff;border-color:#7b4fb0;}
+  .act-freq-btn.sel.bright{background:#16c60c;color:#fff;border-color:#16c60c;box-shadow:0 0 6px rgba(22,198,12,.55);}
+  .act-freq-btn.letter{
+    width:auto;min-width:20px;height:22px;padding:0 4px;
+    font-size:9px;border-radius:5px;align-self:center;
+  }
 
   .pending-row{display:flex;align-items:center;gap:6px;margin-top:8px;}
   .pending-label{font-size:10.5px;color:var(--ink-soft);}
@@ -316,7 +321,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 18</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 21</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -406,7 +411,12 @@ window.addEventListener('unhandledrejection', function(e){
 
 (function(){
   const FREQ_OPTS=[0,1,2,3,4,5];
-  const ACT_FREQ_OPTS=[0,1,2,3,4,'R'];
+  const ACT_FREQ_OPTS=[0,1,2,3,4,'R','מ','פה','א'];
+  // Letter options behave like R: they are a valid "filled" answer on their own
+  // and never require a written explanation.
+  const LETTER_OPTS=['R','מ','פה','א'];
+  // These three are the small, bright-green status letters (R stays full size).
+  const SMALL_LETTERS=['מ','פה','א'];
   const els={
     board:document.getElementById('board'),
     statusStrip:document.getElementById('statusStrip'),
@@ -761,18 +771,21 @@ window.addEventListener('unhandledrejection', function(e){
     const actRow=document.createElement('div');
     actRow.className='act-freq-row';
 
-    const comparable = (p.recommended!==null && p.recommended!==undefined && p.freq!==null && p.freq!==undefined);
+    const comparable = (p.recommended!==null && p.recommended!==undefined && typeof p.freq === 'number');
     let mismatch=false;
     if(comparable){ mismatch = (p.freq !== p.recommended); }
 
     ACT_FREQ_OPTS.forEach(val=>{
       const b=document.createElement('button');
-      b.className='act-freq-btn';
+      const isLetter = LETTER_OPTS.includes(val);
+      const isSmall  = SMALL_LETTERS.includes(val);
+      b.className='act-freq-btn'+(isSmall?' letter':'');
       b.textContent=val;
       const isSel = p.freq===val;
       if(isSel){
         b.classList.add('sel');
-        if(val==='R'){ b.classList.add('special'); }
+        if(isSmall){ b.classList.add('bright'); }
+        else if(isLetter){ b.classList.add('special'); }
         else{ b.classList.add(comparable ? (mismatch?'mismatch':'match') : 'neutral'); }
       }
       b.onclick=()=>{
@@ -1612,15 +1625,17 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
           <thead><tr><th>מטופל</th><th>תדירות מומלצת</th><th>תדירות בפועל</th><th>הערה</th></tr></thead>
           <tbody>
             ${col.patients.map(p=>{
-              const comparable=(p.recommended!==null && p.recommended!==undefined && p.freq!==null && p.freq!==undefined);
+              const comparable=(p.recommended!==null && p.recommended!==undefined && typeof p.freq === 'number');
               const mismatch = comparable && p.freq!==p.recommended;
               const pendingSet = (p.pending!==null && p.pending!==undefined);
               const forceRed = !!p.star;
               const pendingNumeric = pendingSet;
-              const isR = p.freq==='R';
+              const isR      = (p.freq==='R');
+              const isBright = (p.freq==='מ' || p.freq==='פה' || p.freq==='א');
 
               let rowClass='';
               if(forceRed) rowClass='mismatch-row';
+              else if(isBright) rowClass='bright-row';
               else if(isR) rowClass='r-row';
               else if(!pendingNumeric && mismatch) rowClass='mismatch-row';
 
@@ -1674,6 +1689,7 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
               #pdfPreviewModal th{background:#f0f0f0;}
               #pdfPreviewModal tr.mismatch-row td{background:#fbe9e9;color:#c14545;font-weight:700;}
               #pdfPreviewModal tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
+              #pdfPreviewModal tr.bright-row td{background:#dcffd6;color:#0f8a08;font-weight:700;}
               #pdfPreviewModal td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
               #pdfPreviewModal .print-date{font-size:11px;color:#777;}
             </style>
@@ -1709,13 +1725,14 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
   .print-col th{background:#f0f0f0;}
   .print-col tr.mismatch-row td{background:#fbe9e9;color:#c14545;font-weight:700;}
   .print-col tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
+  .print-col tr.bright-row td{background:#dcffd6;color:#0f8a08;font-weight:700;}
   .print-col td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
   .print-date{color:#555;font-size:13px;margin-bottom:2px;}
   .hint-bar{background:#eef1f4;color:#4a5670;padding:10px 16px;font-size:13px;text-align:center;}
   @media print{ .hint-bar{display:none;} }
 </style></head>
 <body>
-<div class="hint-bar">קובץ מוכן להדפסה — לחצו Ctrl/Cmd+P ובחרו "שמירה כ-PDF" כדי לייצא PDF מחולק לפי עמודות. אדום = אי-התאמה (או סימון *). סגול = מסומן R. כתום = המטופל עוד צריך לקבוע פגישות השבוע</div>
+<div class="hint-bar">קובץ מוכן להדפסה — לחצו Ctrl/Cmd+P ובחרו "שמירה כ-PDF" כדי לייצא PDF מחולק לפי עמודות. אדום = אי-התאמה (או סימון *). סגול = מסומן R. ירוק = מ / פה / א. כתום = המטופל עוד צריך לקבוע פגישות השבוע</div>
 ${colsHtml}
 </body></html>`;
 
