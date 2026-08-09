@@ -281,34 +281,6 @@
   .choice-modal h3{margin-top:0;}
   .choice-modal .btn{width:100%;margin-bottom:8px;}
 
-  .gate-overlay{
-    position:fixed;inset:0;background:var(--ink);z-index:100;
-    display:flex;align-items:center;justify-content:center;padding:20px;
-  }
-  .gate-box{background:#fff;border-radius:14px;padding:28px 24px;max-width:340px;width:100%;text-align:center;}
-  .gate-box .tab{display:inline-block;margin-bottom:10px;}
-  .gate-box h2{margin:6px 0 4px;font-size:18px;}
-  .gate-box input{
-    width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;
-    font-size:15px;text-align:center;margin:14px 0 8px;font-family:'Heebo',sans-serif;
-  }
-  .gate-box .err{color:var(--red);font-size:13px;min-height:18px;}
-
-  /* PRINT — the split-by-column PDF output */
-  .print-sheet{display:none;}
-  @media print{
-    .no-print{display:none !important;}
-    body{background:#fff;}
-    .print-sheet{display:block;}
-    .print-col{page-break-after:always;padding:24px;font-family:'Heebo',sans-serif;}
-    .print-col:last-child{page-break-after:auto;}
-    .print-col h2{font-family:'Rubik',sans-serif;border-bottom:3px solid #152238;padding-bottom:8px;}
-    .print-col table{width:100%;border-collapse:collapse;margin-top:12px;}
-    .print-col th,.print-col td{border:1px solid #ccc;padding:7px 9px;text-align:right;font-size:14px;}
-    .print-col th{background:#f0f0f0;}
-    .print-date{color:#555;font-size:13px;margin-bottom:2px;}
-  }
-
   @media (max-width:640px){
     .topbar{padding:10px 12px;}
     .brand h1{font-size:15px;}
@@ -321,7 +293,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 21</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 23</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -347,7 +319,6 @@
 
 <div class="board no-print" id="board"></div>
 
-<div class="print-sheet" id="printSheet"></div>
 
 <div class="toast" id="toast"></div>
 
@@ -434,7 +405,6 @@ window.addEventListener('unhandledrejection', function(e){
     remindBtn:document.getElementById('remindBtn'),
     weekBtn:document.getElementById('weekBtn'),
     staffBtn:document.getElementById('staffBtn'),
-    printSheet:document.getElementById('printSheet'),
     toast:document.getElementById('toast'),
   };
 
@@ -601,17 +571,34 @@ window.addEventListener('unhandledrejection', function(e){
 
   // A patient counts as filled if EITHER an actual frequency (circle) was chosen
   // OR a pending count (square 1/2/3) was marked.
-  // The one blocking case: an asterisk (*) with nothing else and no explanation.
+  // An explanation is REQUIRED whenever:
+  //   * a star was marked
+  //   * R was chosen
+  //   * the actual frequency differs from the recommended one
   function isIncomplete(p){
     const hasFreq   = !(p.freq===null || p.freq===undefined);
     const hasSquare = (p.pending!==null && p.pending!==undefined);
     const hasStar   = !!p.star;
     const hasNote   = !!(p.note||'').trim();
 
-    // A star ALWAYS requires a written explanation, whatever else is marked.
-    if(hasStar && !hasNote) return true;
+    const isRchoice = (p.freq === 'R');
+    const comparable = (p.recommended!==null && p.recommended!==undefined && typeof p.freq === 'number');
+    const isMismatch = comparable && p.freq !== p.recommended;
+
+    // These always demand a written reason, whatever else is marked.
+    if((hasStar || isRchoice || isMismatch) && !hasNote) return true;
+
     if(hasFreq || hasSquare || hasStar) return false;
     return true; // nothing filled at all
+  }
+
+  // Why a note is required for this patient (or null if it isn't).
+  function noteReason(p){
+    if(p.star) return 'star';
+    if(p.freq === 'R') return 'R';
+    const comparable = (p.recommended!==null && p.recommended!==undefined && typeof p.freq === 'number');
+    if(comparable && p.freq !== p.recommended) return 'mismatch';
+    return null;
   }
 
   function renderColumn(col){
@@ -674,11 +661,11 @@ window.addEventListener('unhandledrejection', function(e){
         col.showMissing = true;   // highlight the empty ones in red
         col.done = false;
         scheduleSave(); render();
-        const starNoReason = missing.filter(p=>p.star).length;
-        const empty = missing.length - starNoReason;
+        const needNote = missing.filter(p=>noteReason(p)).length;
+        const empty = missing.length - needNote;
         const parts=[];
         if(empty) parts.push(`${empty} ריקים`);
-        if(starNoReason) parts.push(`${starNoReason} עם * ללא הסבר`);
+        if(needNote) parts.push(`${needNote} ללא הסבר`);
         showToast('⚠️ נותרו: '+parts.join(', '));
       }else{
         col.showMissing = false;
@@ -845,12 +832,12 @@ window.addEventListener('unhandledrejection', function(e){
     box.appendChild(pendingRow);
 
     const note=document.createElement('input');
-    const noteRequired = !!p.star;
-    const noteMissing = noteRequired && !(p.note||'').trim();
-    note.className='note-input'+((mismatch||noteMissing)?' needs-note':'');
-    note.placeholder = noteMissing ? '⚠️ חובה: הסבירו את הסימון *'
-                     : noteRequired ? 'הסבר לסימון *'
-                     : mismatch ? '⚠️ נדרש הסבר על אי ההתאמה'
+    const reason = noteReason(p);
+    const noteMissing = !!reason && !(p.note||'').trim();
+    const reasonText = { star:'הסימון *', R:'בחירת R', mismatch:'אי ההתאמה לתדירות המומלצת' }[reason] || '';
+    note.className='note-input'+(noteMissing?' needs-note':'');
+    note.placeholder = noteMissing ? ('⚠️ חובה: הסבירו את '+reasonText)
+                     : reason ? ('הסבר ל'+reasonText)
                      : 'הערה (לא חובה)';
     note.value=p.note||'';
     note.oninput=()=>{
@@ -960,9 +947,6 @@ window.addEventListener('unhandledrejection', function(e){
 
   const PDF_DATE_RE = /\d{2}\/\d{2}\/\d{4}/;
 
-  // Tokens are already normalized by extractPdfRows.
-  function fixToken(t){ return t; }
-
   // tokens: right-to-left ordered strings for one row.
   // Returns {therapist, patient, freq} or null.
   function parsePdfTokens(tokens){
@@ -990,7 +974,7 @@ window.addEventListener('unhandledrejection', function(e){
     let freq = null;
     for(const t of therapistSide){ if(/^[0-5]$/.test(t)){ freq = Number(t); break; } }
 
-    const words = nameSide.filter(t=>!isNoise(t)).map(fixToken);
+    const words = nameSide.filter(t=>!isNoise(t));
     const patient = words.join(' ').replace(/\s+/g,' ').trim();
     if(!patient) return null;
     return {therapist, patient, freq};
