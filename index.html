@@ -190,6 +190,20 @@
     font-size:9px;border-radius:5px;align-self:center;
   }
 
+  .bal-row{display:flex;align-items:center;gap:5px;margin:-2px 0 6px;}
+  .bal-label{font-size:10px;color:var(--ink-soft);}
+  .bal-val{
+    flex:1;min-width:0;border:1px solid transparent;background:transparent;
+    font-family:'Rubik',sans-serif;font-weight:700;font-size:11.5px;
+    padding:1px 4px;border-radius:4px;text-align:right;direction:ltr;
+  }
+  .bal-val:focus{border-color:var(--line);background:#fff;outline:none;}
+  .bal-val.locked{cursor:default;}
+  .bal-val.debt-high{color:#fff;background:var(--red);}
+  .bal-val.debt{color:var(--amber);}
+  .bal-val.credit{color:var(--teal-dark);}
+  .bal-val.zero,.bal-val.none{color:#9aa3b0;}
+
   .pending-row{display:flex;align-items:center;gap:6px;margin-top:8px;}
   .pending-label{font-size:10.5px;color:var(--ink-soft);}
   .pending-btns{display:flex;gap:4px;}
@@ -293,7 +307,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 23</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 24</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -637,7 +651,7 @@ window.addEventListener('unhandledrejection', function(e){
     addP.className='add-patient';
     addP.textContent='➕ הוספת מטופל';
     addP.onclick=()=>{
-      col.patients.push({id:uid(),name:'',freq:null,recommended:2,pending:null,star:false,note:''});
+      col.patients.push({id:uid(),name:'',freq:null,recommended:2,pending:null,star:false,note:'',balance:null});
       scheduleSave(); render();
     };
     wrap.appendChild(addP);
@@ -677,6 +691,28 @@ window.addEventListener('unhandledrejection', function(e){
     wrap.appendChild(footer);
 
     return wrap;
+  }
+
+  // Balance helpers. Positive = the patient owes the clinic (debt).
+  // Negative = the clinic owes the patient (credit).
+  const DEBT_ALERT = 400;   // debts ABOVE this are flagged red
+  function fmtBalance(b){
+    if(b===null||b===undefined) return '';
+    const abs = Math.abs(b).toLocaleString('he-IL',{minimumFractionDigits:2, maximumFractionDigits:2});
+    return b<0 ? abs+'-' : abs;
+  }
+  function balClass(b){
+    if(b===null||b===undefined) return 'none';
+    if(b>DEBT_ALERT) return 'debt-high';
+    if(b>0) return 'debt';
+    if(b<0) return 'credit';
+    return 'zero';
+  }
+  function balTitle(b){
+    if(b===null||b===undefined) return 'אין נתון יתרה';
+    if(b>0) return 'חוב של המטופל לקליניקה: '+fmtBalance(b);
+    if(b<0) return 'יתרה לזכות המטופל: '+fmtBalance(Math.abs(b));
+    return 'אין חוב';
   }
 
   function renderPatient(col,p){
@@ -721,6 +757,34 @@ window.addEventListener('unhandledrejection', function(e){
     };
     head.appendChild(moveWrap); head.appendChild(nameInput); head.appendChild(delBtn);
     box.appendChild(head);
+
+    // ---- Balance line (positive = debt to clinic, negative = credit) ----
+    const balRow=document.createElement('div');
+    balRow.className='bal-row';
+    const balLbl=document.createElement('span');
+    balLbl.className='bal-label'; balLbl.textContent='יתרה:';
+    const balVal=document.createElement('input');
+    balVal.className='bal-val '+balClass(p.balance);
+    balVal.value = fmtBalance(p.balance);
+    balVal.title = balTitle(p.balance);
+    if(IS_MANAGER){
+      balVal.onchange=()=>{
+        const raw = balVal.value.trim();
+        if(raw===''||raw==='—'){ p.balance=null; }
+        else{
+          const credit = /-\s*$/.test(raw) || /^\s*-/.test(raw);
+          const num = parseFloat(raw.replace(/[^\d.]/g,''));
+          p.balance = isNaN(num) ? null : (credit ? -num : num);
+        }
+        scheduleSave(); render();
+      };
+    }else{
+      balVal.readOnly = true;
+      balVal.classList.add('locked');
+      balVal.onclick = ()=>showToast('🔒 רק מנהל יכול לשנות יתרה');
+    }
+    balRow.appendChild(balLbl); balRow.appendChild(balVal);
+    box.appendChild(balRow);
 
     const squares=document.createElement('div');
     squares.className='freq-squares';
@@ -858,7 +922,7 @@ window.addEventListener('unhandledrejection', function(e){
   function addColumn(){
     if(!day) day = emptyDay(fmtDateKey(currentDate));
     if(!Array.isArray(day.columns)) day.columns = [];
-    day.columns.push({id:uid(), therapist:'', done:false, showMissing:false, patients:[{id:uid(),name:'',freq:null,recommended:2,pending:null,star:false,note:''}]});
+    day.columns.push({id:uid(), therapist:'', done:false, showMissing:false, patients:[{id:uid(),name:'',freq:null,recommended:2,pending:null,star:false,note:'',balance:null}]});
     scheduleSave();
   }
 
@@ -908,7 +972,7 @@ window.addEventListener('unhandledrejection', function(e){
   // Known clinic therapists. pdf.js scrambles Hebrew text badly, so instead of
   // parsing by position we identify the therapist by letter-coverage against this
   // list, and locate the patient relative to the date (which never gets garbled).
-  const DEFAULT_THERAPISTS = ['ד"ר סאם חמיס','אופיר פינצי','ארז קליש','גיא הורוביץ','גלי נאמן','זהר אדר','יניב אגאייב','עופרי רכבוך','עמית בר','רוני בירן','עמית דודידוף'];
+  const DEFAULT_THERAPISTS = ['ד"ר סאם חמיס','אופיר פינצי','ארז קליש','גיא הורוביץ','גלי נאמן','זהר אדר','יניב אגאייב','עופרי רכבוך','עמית בר','רוני בירן','עמית דודידוף','עמית דוידוף'];
   let THERAPISTS = DEFAULT_THERAPISTS.slice();
   try{
     const saved = localStorage.getItem('imacs_therapists');
@@ -961,9 +1025,24 @@ window.addEventListener('unhandledrejection', function(e){
     const left  = tokens.slice(0, dIdx);
     const right = tokens.slice(dIdx+1);
 
+    // Balance column, e.g. "400.00" (debt) or "400.00-" (credit) or "2,800.00"
+    const MONEY_RE = /^[\d,]+\.\d{2}-?$/;
+    let balance = null;
+    for(let i=tokens.length-1;i>=0;i--){
+      const t=tokens[i];
+      if(MONEY_RE.test(t)){
+        const credit = t.endsWith('-');
+        const num = parseFloat(t.replace(/,/g,'').replace(/-$/,''));
+        if(!isNaN(num)) balance = credit ? -num : num;   // credit is negative
+        break;
+      }
+    }
+
     const isNoise = t => /^\d{2}:\d{2}(:\d{2})?$/.test(t)   // times
                       || /^[\d\-]{5,}$/.test(t)              // phone numbers
                       || /^[0-5]$/.test(t)                   // frequency digit
+                      || MONEY_RE.test(t)                    // balance
+                      || t === '.'                           // stray separator
                       || PDF_DATE_RE.test(t);
 
     // The therapist and the frequency live on the same side of the date.
@@ -977,7 +1056,7 @@ window.addEventListener('unhandledrejection', function(e){
     const words = nameSide.filter(t=>!isNoise(t));
     const patient = words.join(' ').replace(/\s+/g,' ').trim();
     if(!patient) return null;
-    return {therapist, patient, freq};
+    return {therapist, patient, freq, balance};
   }
 
   async function handlePickedPdf(e, inputEl){
@@ -1005,7 +1084,7 @@ window.addEventListener('unhandledrejection', function(e){
         if(!parsed) return;
         matchedRows++;
         if(!columnsMap.has(parsed.therapist)) columnsMap.set(parsed.therapist, []);
-        columnsMap.get(parsed.therapist).push({name:parsed.patient, recommended:parsed.freq});
+        columnsMap.get(parsed.therapist).push({name:parsed.patient, recommended:parsed.freq, balance:parsed.balance});
       });
       hideModal();
       if(matchedRows===0){
@@ -1316,7 +1395,7 @@ window.addEventListener('unhandledrejection', function(e){
     if(mode==='replace'){
       day.columns = extractedColumns.map(c=>({
         id:uid(), therapist:c.therapist||'', done:false, showMissing:false,
-        patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:''}))
+        patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:'',balance:(p.balance===undefined?null:p.balance)}))
       }));
     }else{
       extractedColumns.forEach(c=>{
@@ -1325,13 +1404,13 @@ window.addEventListener('unhandledrejection', function(e){
         if(existing){
           (c.patients||[]).forEach(p=>{
             if(!existing.patients.some(x=>(x.name||'').trim()===p.name.trim())){
-              existing.patients.push({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:''});
+              existing.patients.push({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:'',balance:(p.balance===undefined?null:p.balance)});
             }
           });
         }else{
           day.columns.push({
             id:uid(), therapist:c.therapist||'', done:false, showMissing:false,
-            patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:''}))
+            patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:'',balance:(p.balance===undefined?null:p.balance)}))
           });
         }
       });
@@ -1606,7 +1685,7 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
         <div class="print-date">${escapeHtml(fmtDateLabel(currentDate))}</div>
         <h2>${escapeHtml(col.therapist||'ללא שם')}</h2>
         <table>
-          <thead><tr><th>מטופל</th><th>תדירות מומלצת</th><th>תדירות בפועל</th><th>הערה</th></tr></thead>
+          <thead><tr><th>מטופל</th><th>יתרה</th><th>תדירות מומלצת</th><th>תדירות בפועל</th><th>הערה</th></tr></thead>
           <tbody>
             ${col.patients.map(p=>{
               const comparable=(p.recommended!==null && p.recommended!==undefined && typeof p.freq === 'number');
@@ -1632,8 +1711,11 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
 
               const actualCellClass = (!forceRed && pendingNumeric) ? ' class="pending-cell"' : '';
 
+              const balCls = balClass(p.balance);
+              const balTxt = (p.balance===null||p.balance===undefined) ? '—' : fmtBalance(p.balance);
               return `<tr class="${rowClass}">
               <td>${escapeHtml(p.name||'')}</td>
+              <td class="bal-cell ${balCls}">${balTxt}</td>
               <td>${p.recommended===null||p.recommended===undefined?'—':p.recommended}</td>
               <td${actualCellClass}>${actualCell}</td>
               <td>${escapeHtml(p.note||'')}</td>
@@ -1675,6 +1757,11 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
               #pdfPreviewModal tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
               #pdfPreviewModal tr.bright-row td{background:#dcffd6;color:#0f8a08;font-weight:700;}
               #pdfPreviewModal td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
+              #pdfPreviewModal td.bal-cell{direction:ltr;font-weight:700;}
+              #pdfPreviewModal td.bal-cell.debt-high{background:#c14545 !important;color:#fff !important;}
+              #pdfPreviewModal td.bal-cell.debt{color:#c98a2e;}
+              #pdfPreviewModal td.bal-cell.credit{color:#22685f;}
+              #pdfPreviewModal td.bal-cell.zero,#pdfPreviewModal td.bal-cell.none{color:#9aa3b0;}
               #pdfPreviewModal .print-date{font-size:11px;color:#777;}
             </style>
             ${colsHtml}
@@ -1711,12 +1798,18 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
   .print-col tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
   .print-col tr.bright-row td{background:#dcffd6;color:#0f8a08;font-weight:700;}
   .print-col td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
+  .print-col td.bal-cell{direction:ltr;font-weight:700;}
+  .print-col td.bal-cell.debt-high{background:#c14545 !important;color:#fff !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .print-col td.bal-cell.debt{color:#c98a2e;}
+  .print-col td.bal-cell.credit{color:#22685f;}
+  .print-col td.bal-cell.zero,.print-col td.bal-cell.none{color:#9aa3b0;}
   .print-date{color:#555;font-size:13px;margin-bottom:2px;}
   .hint-bar{background:#eef1f4;color:#4a5670;padding:10px 16px;font-size:13px;text-align:center;}
   @media print{ .hint-bar{display:none;} }
 </style></head>
 <body>
-<div class="hint-bar">קובץ מוכן להדפסה — לחצו Ctrl/Cmd+P ובחרו "שמירה כ-PDF" כדי לייצא PDF מחולק לפי עמודות. אדום = אי-התאמה (או סימון *). סגול = מסומן R. ירוק = מ / פה / א. כתום = המטופל עוד צריך לקבוע פגישות השבוע</div>
+<div class="hint-bar">קובץ מוכן להדפסה — לחצו Ctrl/Cmd+P ובחרו "שמירה כ-PDF" כדי לייצא PDF מחולק לפי עמודות. אדום = אי-התאמה (או סימון *). סגול = מסומן R. ירוק = מ / פה / א. כתום = המטופל עוד צריך לקבוע פגישות השבוע. יתרה באדום = חוב מעל 400 · מספר עם "-" = זכות למטופל</div>
 ${colsHtml}
 </body></html>`;
 
