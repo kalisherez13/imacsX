@@ -190,6 +190,19 @@
     font-size:9px;border-radius:5px;align-self:center;
   }
 
+  .clin-row{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;}
+  .clin-label{font-size:10.5px;color:var(--ink-soft);}
+  .clin-btns{display:flex;gap:4px;}
+  .clin-btn{
+    border:1px solid var(--line);background:#fff;color:var(--ink-soft);
+    font-family:'Heebo',sans-serif;font-size:10px;font-weight:600;
+    padding:3px 7px;border-radius:12px;cursor:pointer;white-space:nowrap;
+  }
+  .clin-btn.sel.acute{background:var(--red);color:#fff;border-color:var(--red);}
+  .clin-btn.sel.slow{background:var(--amber);color:#fff;border-color:var(--amber);}
+  .patient.clin-acute{border-inline-start:4px solid var(--red);}
+  .patient.clin-slow{border-inline-start:4px solid var(--amber);}
+
   .bal-row{display:flex;align-items:center;gap:5px;margin:-2px 0 6px;}
   .bal-label{font-size:10px;color:var(--ink-soft);}
   .bal-val{
@@ -307,7 +320,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 24</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 25</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -400,6 +413,12 @@ window.addEventListener('unhandledrejection', function(e){
   // Letter options behave like R: they are a valid "filled" answer on their own
   // and never require a written explanation.
   const LETTER_OPTS=['R','מ','פה','א'];
+  // Clinical status the therapist can flag for the manager's attention.
+  const CLINICAL_FLAGS=[
+    {key:'acute',  short:'🔴 לא מתקדם', label:'לא מתקדם / אקוטי — לתשומת לב המנהל (עדיפות גבוהה)', prio:1, text:'לא מתקדם / אקוטי'},
+    {key:'slow',   short:'🟡 איטי',     label:'התקדמות איטית — לתשומת לב המנהל (עדיפות בינונית)',   prio:2, text:'התקדמות איטית'}
+  ];
+  function clinicalOf(key){ return CLINICAL_FLAGS.find(f=>f.key===key)||null; }
   // These three are the small, bright-green status letters (R stays full size).
   const SMALL_LETTERS=['מ','פה','א'];
   const els={
@@ -651,7 +670,7 @@ window.addEventListener('unhandledrejection', function(e){
     addP.className='add-patient';
     addP.textContent='➕ הוספת מטופל';
     addP.onclick=()=>{
-      col.patients.push({id:uid(),name:'',freq:null,recommended:2,pending:null,star:false,note:'',balance:null});
+      col.patients.push({id:uid(),name:'',freq:null,recommended:2,pending:null,star:false,clinical:null,note:'',balance:null});
       scheduleSave(); render();
     };
     wrap.appendChild(addP);
@@ -895,6 +914,28 @@ window.addEventListener('unhandledrejection', function(e){
     }
     box.appendChild(pendingRow);
 
+    // ---- Clinical status flags (therapist's own clinical read) ----
+    const clinRow=document.createElement('div');
+    clinRow.className='clin-row';
+    const clinLbl=document.createElement('span');
+    clinLbl.className='clin-label'; clinLbl.textContent='מצב קליני:';
+    const clinBtns=document.createElement('div');
+    clinBtns.className='clin-btns';
+    CLINICAL_FLAGS.forEach(f=>{
+      const b=document.createElement('button');
+      b.className='clin-btn '+f.key+(p.clinical===f.key?' sel':'');
+      b.textContent=f.short;
+      b.title=f.label;
+      b.onclick=()=>{
+        p.clinical = (p.clinical===f.key ? null : f.key);
+        scheduleSave(); render();
+      };
+      clinBtns.appendChild(b);
+    });
+    clinRow.appendChild(clinLbl); clinRow.appendChild(clinBtns);
+    box.appendChild(clinRow);
+    if(p.clinical) box.classList.add('clin-'+p.clinical);
+
     const note=document.createElement('input');
     const reason = noteReason(p);
     const noteMissing = !!reason && !(p.note||'').trim();
@@ -922,7 +963,7 @@ window.addEventListener('unhandledrejection', function(e){
   function addColumn(){
     if(!day) day = emptyDay(fmtDateKey(currentDate));
     if(!Array.isArray(day.columns)) day.columns = [];
-    day.columns.push({id:uid(), therapist:'', done:false, showMissing:false, patients:[{id:uid(),name:'',freq:null,recommended:2,pending:null,star:false,note:'',balance:null}]});
+    day.columns.push({id:uid(), therapist:'', done:false, showMissing:false, patients:[{id:uid(),name:'',freq:null,recommended:2,pending:null,star:false,clinical:null,note:'',balance:null}]});
     scheduleSave();
   }
 
@@ -1395,7 +1436,7 @@ window.addEventListener('unhandledrejection', function(e){
     if(mode==='replace'){
       day.columns = extractedColumns.map(c=>({
         id:uid(), therapist:c.therapist||'', done:false, showMissing:false,
-        patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:'',balance:(p.balance===undefined?null:p.balance)}))
+        patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,clinical:null,note:'',balance:(p.balance===undefined?null:p.balance)}))
       }));
     }else{
       extractedColumns.forEach(c=>{
@@ -1404,13 +1445,13 @@ window.addEventListener('unhandledrejection', function(e){
         if(existing){
           (c.patients||[]).forEach(p=>{
             if(!existing.patients.some(x=>(x.name||'').trim()===p.name.trim())){
-              existing.patients.push({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:'',balance:(p.balance===undefined?null:p.balance)});
+              existing.patients.push({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,clinical:null,note:'',balance:(p.balance===undefined?null:p.balance)});
             }
           });
         }else{
           day.columns.push({
             id:uid(), therapist:c.therapist||'', done:false, showMissing:false,
-            patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,note:'',balance:(p.balance===undefined?null:p.balance)}))
+            patients:(c.patients||[]).map(p=>({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,clinical:null,note:'',balance:(p.balance===undefined?null:p.balance)}))
           });
         }
       });
@@ -1586,7 +1627,7 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
         const d=sn.data();
         (d.columns||[]).forEach(c=>{
           const t=(c.therapist||'ללא שם').trim();
-          if(!stats[t]) stats[t]={patients:0,mismatch:0,stars:0,pendingLeft:0,days:0};
+          if(!stats[t]) stats[t]={patients:0,mismatch:0,stars:0,pendingLeft:0,days:0,acute:0,slow:0};
           stats[t].days++;
           (c.patients||[]).forEach(p=>{
             stats[t].patients++; totalPatients++;
@@ -1594,6 +1635,8 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
             if(comparable && p.freq!==p.recommended){ stats[t].mismatch++; totalMismatch++; }
             if(p.star){ stats[t].stars++; totalStars++; }
             if(p.pending!==null&&p.pending!==undefined) stats[t].pendingLeft++;
+            if(p.clinical==='acute') stats[t].acute++;
+            if(p.clinical==='slow')  stats[t].slow++;
           });
         });
       });
@@ -1612,6 +1655,8 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
           <td${st.mismatch?' style="color:#c14545;font-weight:700;"':''}>${st.mismatch} (${pct}%)</td>
           <td${st.stars?' style="color:#c14545;font-weight:700;"':''}>${st.stars}</td>
           <td>${st.pendingLeft}</td>
+          <td${st.acute?' style="color:#c14545;font-weight:700;"':''}>${st.acute}</td>
+          <td${st.slow?' style="color:#c98a2e;font-weight:700;"':''}>${st.slow}</td>
         </tr>`;
       }).join('');
 
@@ -1628,7 +1673,7 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
               #weekTbl th{background:#f0f0f0;position:sticky;top:0;}
             </style>
             <table id="weekTbl">
-              <thead><tr><th>מטפל</th><th>ימים</th><th>מטופלים</th><th>אי-התאמות</th><th>סימוני *</th><th>עוד לקבוע</th></tr></thead>
+              <thead><tr><th>מטפל</th><th>ימים</th><th>מטופלים</th><th>אי-התאמות</th><th>סימוני *</th><th>עוד לקבוע</th><th>🔴 אקוטי</th><th>🟡 איטי</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
@@ -1685,9 +1730,13 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
         <div class="print-date">${escapeHtml(fmtDateLabel(currentDate))}</div>
         <h2>${escapeHtml(col.therapist||'ללא שם')}</h2>
         <table>
-          <thead><tr><th>מטופל</th><th>יתרה</th><th>תדירות מומלצת</th><th>תדירות בפועל</th><th>הערה</th></tr></thead>
+          <thead><tr><th>מטופל</th><th>לתשומת לב המנהל</th><th>יתרה</th><th>תדירות מומלצת</th><th>תדירות בפועל</th><th>הערה</th></tr></thead>
           <tbody>
-            ${col.patients.map(p=>{
+            ${col.patients.slice().sort((a,b)=>{
+                const pa = a.clinical ? (clinicalOf(a.clinical)||{}).prio || 9 : 9;
+                const pb = b.clinical ? (clinicalOf(b.clinical)||{}).prio || 9 : 9;
+                return pa - pb;   // acute first, then slow, then the rest
+              }).map(p=>{
               const comparable=(p.recommended!==null && p.recommended!==undefined && typeof p.freq === 'number');
               const mismatch = comparable && p.freq!==p.recommended;
               const pendingSet = (p.pending!==null && p.pending!==undefined);
@@ -1713,8 +1762,10 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
 
               const balCls = balClass(p.balance);
               const balTxt = (p.balance===null||p.balance===undefined) ? '—' : fmtBalance(p.balance);
+              const clin = clinicalOf(p.clinical);
               return `<tr class="${rowClass}">
               <td>${escapeHtml(p.name||'')}</td>
+              <td class="clin-cell ${p.clinical||''}">${clin ? escapeHtml(clin.text) : '—'}</td>
               <td class="bal-cell ${balCls}">${balTxt}</td>
               <td>${p.recommended===null||p.recommended===undefined?'—':p.recommended}</td>
               <td${actualCellClass}>${actualCell}</td>
@@ -1735,6 +1786,8 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
       return comparable && p.freq!==p.recommended;
     }).length,0);
     const pendingCount = day.columns.reduce((s,c)=>s+c.patients.filter(p=>p.pending!==null && p.pending!==undefined).length,0);
+    const acuteCount = day.columns.reduce((s,c)=>s+c.patients.filter(p=>p.clinical==='acute').length,0);
+    const slowCount  = day.columns.reduce((s,c)=>s+c.patients.filter(p=>p.clinical==='slow').length,0);
 
     let m=document.getElementById('pdfPreviewModal');
     if(m) m.remove();
@@ -1744,7 +1797,7 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
     m.innerHTML=`
       <div class="crop-modal" style="max-width:640px;">
         <h3>תצוגה מקדימה לפני הפקה</h3>
-        <p class="hint">${day.columns.length} עמודות, ${totalPatients} מטופלים${mismatchCount? ` — ⚠️ ${mismatchCount} אי-התאמות באדום`:''}${pendingCount? ` — 🟠 ${pendingCount} עוד לקבוע בכתום`:''}</p>
+        <p class="hint">${day.columns.length} עמודות, ${totalPatients} מטופלים${mismatchCount? ` — ⚠️ ${mismatchCount} אי-התאמות באדום`:''}${pendingCount? ` — 🟠 ${pendingCount} עוד לקבוע`:''}${acuteCount? ` — 🔴 ${acuteCount} לא מתקדם/אקוטי`:''}${slowCount? ` — 🟡 ${slowCount} התקדמות איטית`:''}</p>
         <div class="crop-wrap" style="background:#fff;text-align:right;">
           <div style="width:100%;max-height:50vh;overflow:auto;">
             <style>
@@ -1757,6 +1810,9 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
               #pdfPreviewModal tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
               #pdfPreviewModal tr.bright-row td{background:#dcffd6;color:#0f8a08;font-weight:700;}
               #pdfPreviewModal td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
+              #pdfPreviewModal td.clin-cell{font-weight:700;}
+              #pdfPreviewModal td.clin-cell.acute{background:#c14545 !important;color:#fff !important;}
+              #pdfPreviewModal td.clin-cell.slow{background:#fbf1de;color:#c98a2e;}
               #pdfPreviewModal td.bal-cell{direction:ltr;font-weight:700;}
               #pdfPreviewModal td.bal-cell.debt-high{background:#c14545 !important;color:#fff !important;}
               #pdfPreviewModal td.bal-cell.debt{color:#c98a2e;}
@@ -1798,6 +1854,11 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
   .print-col tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
   .print-col tr.bright-row td{background:#dcffd6;color:#0f8a08;font-weight:700;}
   .print-col td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
+  .print-col td.clin-cell{font-weight:700;}
+  .print-col td.clin-cell.acute{background:#c14545 !important;color:#fff !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .print-col td.clin-cell.slow{background:#fbf1de;color:#c98a2e;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .print-col td.bal-cell{direction:ltr;font-weight:700;}
   .print-col td.bal-cell.debt-high{background:#c14545 !important;color:#fff !important;
     -webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -1809,7 +1870,7 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
   @media print{ .hint-bar{display:none;} }
 </style></head>
 <body>
-<div class="hint-bar">קובץ מוכן להדפסה — לחצו Ctrl/Cmd+P ובחרו "שמירה כ-PDF" כדי לייצא PDF מחולק לפי עמודות. אדום = אי-התאמה (או סימון *). סגול = מסומן R. ירוק = מ / פה / א. כתום = המטופל עוד צריך לקבוע פגישות השבוע. יתרה באדום = חוב מעל 400 · מספר עם "-" = זכות למטופל</div>
+<div class="hint-bar">קובץ מוכן להדפסה — לחצו Ctrl/Cmd+P ובחרו "שמירה כ-PDF" כדי לייצא PDF מחולק לפי עמודות. אדום = אי-התאמה (או סימון *). סגול = מסומן R. ירוק = מ / פה / א. כתום = המטופל עוד צריך לקבוע פגישות השבוע. יתרה באדום = חוב מעל 400 · מספר עם "-" = זכות למטופל · "לתשומת לב המנהל": אדום = לא מתקדם/אקוטי (עדיפות גבוהה), כתום = התקדמות איטית</div>
 ${colsHtml}
 </body></html>`;
 
