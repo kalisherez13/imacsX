@@ -320,7 +320,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 25</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 26</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -1086,6 +1086,10 @@ window.addEventListener('unhandledrejection', function(e){
                       || t === '.'                           // stray separator
                       || PDF_DATE_RE.test(t);
 
+    // When spacing is tight, pdf.js can merge the phone number into the first
+    // name token (e.g. "9552274250 מ"). Strip any leading digit run.
+    const stripLeadingPhone = t => t.replace(/^[\d\-]{5,}\s*/, '').trim();
+
     // The therapist and the frequency live on the same side of the date.
     const leftHasTherapist = !!findTherapist(left.join(' '));
     const therapistSide = leftHasTherapist ? left : right;
@@ -1094,7 +1098,7 @@ window.addEventListener('unhandledrejection', function(e){
     let freq = null;
     for(const t of therapistSide){ if(/^[0-5]$/.test(t)){ freq = Number(t); break; } }
 
-    const words = nameSide.filter(t=>!isNoise(t));
+    const words = nameSide.map(stripLeadingPhone).filter(t=>t && !isNoise(t));
     const patient = words.join(' ').replace(/\s+/g,' ').trim();
     if(!patient) return null;
     return {therapist, patient, freq, balance};
@@ -1807,6 +1811,7 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
               #pdfPreviewModal th,#pdfPreviewModal td{border:1px solid #ddd;padding:5px 7px;}
               #pdfPreviewModal th{background:#f0f0f0;}
               #pdfPreviewModal tr.mismatch-row td{background:#fbe9e9;color:#c14545;font-weight:700;}
+              #pdfPreviewModal tr.mismatch-row td:first-child{background:#c14545;color:#fff;font-weight:800;}
               #pdfPreviewModal tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
               #pdfPreviewModal tr.bright-row td{background:#dcffd6;color:#0f8a08;font-weight:700;}
               #pdfPreviewModal td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
@@ -1850,7 +1855,10 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
   .print-col table{width:100%;border-collapse:collapse;margin-top:14px;}
   .print-col th,.print-col td{border:1px solid #ccc;padding:8px 10px;text-align:right;font-size:15px;}
   .print-col th{background:#f0f0f0;}
-  .print-col tr.mismatch-row td{background:#fbe9e9;color:#c14545;font-weight:700;}
+  .print-col tr.mismatch-row td{background:#fbe9e9;color:#c14545;font-weight:700;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .print-col tr.mismatch-row td:first-child{background:#c14545;color:#fff;font-weight:800;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .print-col tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
   .print-col tr.bright-row td{background:#dcffd6;color:#0f8a08;font-weight:700;}
   .print-col td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
