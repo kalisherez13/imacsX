@@ -320,7 +320,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 26</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 27</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -559,6 +559,26 @@ window.addEventListener('unhandledrejection', function(e){
     // Safety net: a null/malformed day must never crash the app
     if(!day || typeof day !== 'object') day = emptyDay(fmtDateKey(currentDate));
     if(!Array.isArray(day.columns)) day.columns = [];
+    // Merge any duplicate therapist columns (older data / past import bug)
+    const seen = new Map();
+    const merged = [];
+    day.columns.forEach(c=>{
+      const key = (c.therapist||'').trim();
+      if(key && seen.has(key)){
+        const target = seen.get(key);
+        (c.patients||[]).forEach(p=>{
+          if(!target.patients.some(x=>(x.name||'').trim() === (p.name||'').trim())){
+            target.patients.push(p);
+          }
+        });
+        if(!c.done) target.done = false;   // stay incomplete if either part was
+      }else{
+        if(key) seen.set(key, c);
+        merged.push(c);
+      }
+    });
+    if(merged.length !== day.columns.length){ day.columns = merged; scheduleSave(); }
+
     // Migrate older records where the asterisk lived inside `pending`
     day.columns.forEach(c=>{
       (c.patients||[]).forEach(p=>{
@@ -1057,14 +1077,21 @@ window.addEventListener('unhandledrejection', function(e){
   function parsePdfTokens(tokens){
     const flat = tokens.join(' ');
     if(!PDF_DATE_RE.test(flat) || !/\b\d{2}:\d{2}\b/.test(flat)) return null;
-    const therapist = findTherapist(flat);
-    if(!therapist) return null;
 
     const dIdx = tokens.findIndex(t=>PDF_DATE_RE.test(t));
     if(dIdx < 0) return null;
 
     const left  = tokens.slice(0, dIdx);
     const right = tokens.slice(dIdx+1);
+
+    // IMPORTANT: match the therapist ONLY against the side of the row that holds
+    // the therapist column. Matching the whole row lets the patient's letters tip
+    // the result toward a similarly-spelled therapist, which used to create a
+    // duplicate column containing a single patient.
+    const leftName  = findTherapist(left.join(' '));
+    const rightName = findTherapist(right.join(' '));
+    const therapist = leftName || rightName;
+    if(!therapist) return null;
 
     // Balance column, e.g. "400.00" (debt) or "400.00-" (credit) or "2,800.00"
     const MONEY_RE = /^[\d,]+\.\d{2}-?$/;
@@ -1091,7 +1118,7 @@ window.addEventListener('unhandledrejection', function(e){
     const stripLeadingPhone = t => t.replace(/^[\d\-]{5,}\s*/, '').trim();
 
     // The therapist and the frequency live on the same side of the date.
-    const leftHasTherapist = !!findTherapist(left.join(' '));
+    const leftHasTherapist = !!leftName;
     const therapistSide = leftHasTherapist ? left : right;
     const nameSide      = leftHasTherapist ? right : left;
 
