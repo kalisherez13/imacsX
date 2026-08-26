@@ -320,7 +320,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 29</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 30</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -1134,7 +1134,7 @@ window.addEventListener('unhandledrejection', function(e){
     const words = nameSide.map(stripLeadingPhone).filter(t=>t && !isNoise(t));
     const patient = words.join(' ').replace(/\s+/g,' ').trim();
     if(!patient) return null;
-    return {therapist, patient, freq, balance};
+    return {therapist, patient, freq, balance, date: (tokens[dIdx].match(PDF_DATE_RE)||[null])[0]};
   }
 
   async function handlePickedPdf(e, inputEl){
@@ -1155,15 +1155,43 @@ window.addEventListener('unhandledrejection', function(e){
       const arrayBuffer = await file.arrayBuffer();
 
       const rows = await extractPdfRows(arrayBuffer);
-      const columnsMap = new Map(); // therapist -> patients[]
-      let matchedRows=0;
+
+      // A report can span several dates. Only import rows for the day being viewed.
+      const viewed = currentDate;
+      const viewedStr = String(viewed.getDate()).padStart(2,'0')+'/'+
+                        String(viewed.getMonth()+1).padStart(2,'0')+'/'+
+                        viewed.getFullYear();
+
+      const allParsed = [];
       rows.forEach(tokens=>{
         const parsed = parsePdfTokens(tokens);
-        if(!parsed) return;
+        if(parsed) allParsed.push(parsed);
+      });
+
+      const byDate = new Map();
+      allParsed.forEach(r=>{
+        const d = r.date || '';
+        if(!byDate.has(d)) byDate.set(d, []);
+        byDate.get(d).push(r);
+      });
+
+      const forToday = byDate.get(viewedStr) || [];
+      if(allParsed.length && !forToday.length){
+        hideModal();
+        const found = [...byDate.keys()].filter(Boolean).join(', ');
+        showModalError('הקובץ לא מכיל שורות לתאריך שנבחר ('+viewedStr+').\n\nתאריכים שנמצאו בקובץ: '+found+
+                       '\n\nעברו לתאריך המתאים בראש המסך ונסו שוב.');
+        return;
+      }
+
+      const columnsMap = new Map(); // therapist -> patients[]
+      let matchedRows=0;
+      forToday.forEach(parsed=>{
         matchedRows++;
         if(!columnsMap.has(parsed.therapist)) columnsMap.set(parsed.therapist, []);
         columnsMap.get(parsed.therapist).push({name:parsed.patient, recommended:parsed.freq, balance:parsed.balance});
       });
+      const skipped = allParsed.length - forToday.length;
       hideModal();
       if(matchedRows===0){
         const nonEmpty = rows.map(t=>t.join(' ')).filter(l=>l.trim());
@@ -1181,7 +1209,7 @@ window.addEventListener('unhandledrejection', function(e){
       }else{
         applyExtractedColumns(extractedColumns, 'merge', null);
       }
-      showToast(`יובאו ${matchedRows} שורות מהקובץ — התדירות המומלצת נלקחה בדיוק כפי שכתוב בדוח`);
+      showToast(`יובאו ${matchedRows} שורות לתאריך ${viewedStr}` + (skipped? ` (${skipped} שורות מתאריכים אחרים דולגו)` : ''));
     }catch(err){
       console.error(err);
       hideModal();
