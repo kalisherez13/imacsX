@@ -320,7 +320,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 27</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 29</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -631,7 +631,7 @@ window.addEventListener('unhandledrejection', function(e){
   function isIncomplete(p){
     const hasFreq   = !(p.freq===null || p.freq===undefined);
     const hasSquare = (p.pending!==null && p.pending!==undefined);
-    const hasStar   = !!p.star;
+    const hasStar   = !!p.star || p.pending==='*';   // tolerate un-migrated records
     const hasNote   = !!(p.note||'').trim();
 
     const isRchoice = (p.freq === 'R');
@@ -647,7 +647,7 @@ window.addEventListener('unhandledrejection', function(e){
 
   // Why a note is required for this patient (or null if it isn't).
   function noteReason(p){
-    if(p.star) return 'star';
+    if(p.star || p.pending==='*') return 'star';
     if(p.freq === 'R') return 'R';
     const comparable = (p.recommended!==null && p.recommended!==undefined && typeof p.freq === 'number');
     if(comparable && p.freq !== p.recommended) return 'mismatch';
@@ -709,6 +709,10 @@ window.addEventListener('unhandledrejection', function(e){
         return;
       }
       // A patient counts as filled once an actual frequency was chosen.
+      if(!col.patients.length){
+        showToast('אין מטופלים בעמודה הזו');
+        return;
+      }
       const missing = col.patients.filter(isIncomplete);
       if(missing.length){
         col.showMissing = true;   // highlight the empty ones in red
@@ -1106,9 +1110,11 @@ window.addEventListener('unhandledrejection', function(e){
       }
     }
 
+    // Noise on the PATIENT side. Note: a lone digit is NOT stripped here — the
+    // frequency always sits on the therapist's side, and some patient names
+    // legitimately contain a digit (e.g. "פורת 1 דן", "כהן1 אורי").
     const isNoise = t => /^\d{2}:\d{2}(:\d{2})?$/.test(t)   // times
                       || /^[\d\-]{5,}$/.test(t)              // phone numbers
-                      || /^[0-5]$/.test(t)                   // frequency digit
                       || MONEY_RE.test(t)                    // balance
                       || t === '.'                           // stray separator
                       || PDF_DATE_RE.test(t);
