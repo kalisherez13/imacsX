@@ -358,7 +358,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 33</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 34</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -792,8 +792,13 @@ window.addEventListener('unhandledrejection', function(e){
     });
     els.therBar.innerHTML = html;
     els.therBar.querySelectorAll('.ther-chip').forEach(b=>{ b.onclick=()=>setMyTher(b.dataset.name); });
+    // Centre the chosen name inside the bar only — never scroll the whole page.
     const sel = els.therBar.querySelector('.ther-chip.sel');
-    if(sel && sel.scrollIntoView) sel.scrollIntoView({block:'nearest', inline:'center'});
+    if(sel){
+      const bar = els.therBar;
+      const r1=sel.getBoundingClientRect(), r2=bar.getBoundingClientRect();
+      bar.scrollLeft += (r1.left + r1.width/2) - (r2.left + r2.width/2);
+    }
   }
 
   function renderStatusStrip(){
@@ -824,6 +829,12 @@ window.addEventListener('unhandledrejection', function(e){
       if(mab) mab.onclick=()=>{ addColumn(); render(); };
       return;
     }
+    // Redrawing the board must NOT move the user: remember where they are
+    // (page scroll + horizontal position of the columns) and put them back.
+    const sameDay = (lastBoardDay === day.date);
+    const sy = window.scrollY, sx = els.board.scrollLeft, bh = els.board.offsetHeight;
+    if(sameDay) els.board.style.minHeight = bh+'px';   // keep page height so the scroll position survives
+    els.board.style.scrollSnapType = 'none';
     els.board.innerHTML='';
     const cols = visibleColumns();
     els.board.classList.toggle('single', cols.length===1);
@@ -835,7 +846,18 @@ window.addEventListener('unhandledrejection', function(e){
       addBtn.onclick=()=>{ addColumn(); render(); };
       els.board.appendChild(addBtn);
     }
+    if(sameDay){
+      els.board.scrollLeft = sx;
+      window.scrollTo(0, sy);
+    }
+    lastBoardDay = day.date;
+    requestAnimationFrame(()=>{
+      els.board.style.minHeight = '';
+      els.board.style.scrollSnapType = '';
+      if(sameDay){ els.board.scrollLeft = sx; if(Math.abs(window.scrollY - sy) > 2) window.scrollTo(0, sy); }
+    });
   }
+  let lastBoardDay = null;
 
   // A patient counts as filled if EITHER an actual frequency (circle) was chosen
   // OR a pending count (square 1/2/3) was marked.
