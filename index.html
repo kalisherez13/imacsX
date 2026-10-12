@@ -358,7 +358,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 32</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 33</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -409,7 +409,8 @@ const firebaseConfig = {
   messagingSenderId: "219583611465",
   appId: "1:219583611465:web:e4217fe6ec01e47dd93598"
 };
-const FIREBASE_READY = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY_HERE";
+// If the Firebase scripts failed to load (bad network), keep the app usable instead of crashing.
+const FIREBASE_READY = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY_HERE" && typeof firebase !== "undefined";
 
 // ============================================================
 // MANAGER MODE — only a manager may change the RECOMMENDED frequency.
@@ -607,7 +608,7 @@ window.addEventListener('unhandledrejection', function(e){
   async function saveDay(){
     saveTimer = null;
     if(!FIREBASE_READY){
-      showToast('⚠️ Firebase עוד לא מחובר — ערכו את firebaseConfig בקובץ');
+      showToast('⚠️ אין חיבור לשרת — השינוי לא נשמר. בדקו אינטרנט ורעננו את הדף');
       return;
     }
     if(!day) return;
@@ -664,7 +665,7 @@ window.addEventListener('unhandledrejection', function(e){
     render();
 
     if(!FIREBASE_READY){
-      setSyncStatus('offline', 'לא מחובר — ערכו את firebaseConfig בקובץ');
+      setSyncStatus('offline', 'אין חיבור לשרת — בדקו אינטרנט ורעננו את הדף');
       return;
     }
 
@@ -1193,10 +1194,11 @@ window.addEventListener('unhandledrejection', function(e){
     note.value=p.note||'';
     note.oninput=()=>{
       p.note=note.value;
+      note.classList.toggle('needs-note', !!reason && !note.value.trim());
       const wasBlocking = col.showMissing;
       if(wasBlocking && !col.patients.some(isIncomplete)){
         col.showMissing=false;
-        scheduleSave(); render();
+        scheduleSave(); safeRender();   // redraw after typing ends, keeps the keyboard open
         return;
       }
       scheduleSave();
@@ -2167,8 +2169,4 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
               #pdfPreviewModal td.clin-cell{font-weight:700;}
               #pdfPreviewModal td.clin-cell.acute{background:#c14545 !important;color:#fff !important;}
               #pdfPreviewModal td.clin-cell.slow{background:#fbf1de;color:#c98a2e;}
-              #pdfPreviewModal td.bal-cell{direction:ltr;font-weight:700;}
-              #pdfPreviewModal td.bal-cell.debt-high{background:#c14545 !important;color:#fff !important;}
-              #pdfPreviewModal td.bal-cell.debt{color:#c98a2e;}
-              #pdfPreviewModal td.bal-cell.credit{color:#22685f;}
-              #pdfPreviewModal td.bal-c
+              #pdfPreviewModal td.bal-cell{direction:ltr;font-weight:700;
