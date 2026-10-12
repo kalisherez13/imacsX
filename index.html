@@ -308,10 +308,48 @@
   .choice-modal h3{margin-top:0;}
   .choice-modal .btn{width:100%;margin-bottom:8px;}
 
+  .datectrl .datelabel{cursor:pointer;}
+  .ther-bar{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;background:#fff;border-bottom:1px solid var(--line);align-items:center;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .ther-bar::-webkit-scrollbar{display:none;}
+  .ther-bar-label{font-size:12.5px;color:var(--ink-soft);flex:0 0 auto;}
+  .ther-chip{flex:0 0 auto;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:18px;
+    padding:7px 13px;font-family:'Heebo',sans-serif;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .ther-chip.done{border-color:var(--teal);color:var(--teal-dark);}
+  .ther-chip.sel{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .board.single{justify-content:center;}
+  .board.single .column{min-width:min(520px,100%);max-width:520px;flex:1 1 auto;}
+  .board.single .act-freq-row{max-width:none;}
+
   @media (max-width:640px){
-    .topbar{padding:10px 12px;}
+    .topbar{padding:8px 10px;gap:8px;}
     .brand h1{font-size:15px;}
-    .board{padding:10px;}
+    .datectrl{flex:1 1 100%;justify-content:space-between;}
+    .datectrl button{font-size:22px;padding:6px 14px;}
+    .datectrl .datelabel{min-width:0;}
+    .actions{flex-wrap:nowrap;overflow-x:auto;width:100%;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .actions::-webkit-scrollbar{display:none;}
+    .actions .btn{flex:0 0 auto;}
+    .board{padding:10px;gap:10px;scroll-snap-type:x mandatory;}
+    .column{min-width:calc(100vw - 28px);max-width:calc(100vw - 28px);scroll-snap-align:center;}
+    .board.single .column{min-width:100%;max-width:100%;}
+    .topbar{position:static;}
+    .freq-squares{flex-wrap:nowrap;gap:8px;}
+    .freq-squares .freq-col:last-child{flex:1 1 auto;min-width:0;}
+    .act-freq-row{max-width:none;gap:5px;justify-content:flex-start;}
+    .act-freq-btn{width:38px;height:38px;font-size:15px;}
+    .act-freq-btn.letter{height:32px;min-width:34px;font-size:12px;}
+    .freq-square{width:48px;height:48px;font-size:17px;}
+    .pending-btn{width:38px;height:38px;font-size:15px;}
+    .pending-btn.star{font-size:20px;}
+    .clin-btn{padding:8px 12px;font-size:12.5px;}
+    .move-btn{font-size:13px;padding:5px 8px;}
+    .del-p{font-size:20px;padding:6px 8px;}
+    .patient{padding:10px;}
+    .patient-head input.pname,.col-tab input,.note-input,.bal-val{font-size:16px;}
+    .note-input{padding:9px 10px;border-radius:8px;}
+    .add-patient{padding:12px;font-size:15px;}
+    .finish-btn{padding:14px;font-size:16px;justify-content:center;}
+    .freq-col-label,.pending-label,.clin-label,.bal-label{font-size:12px;}
   }
 </style>
 </head>
@@ -320,7 +358,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 30</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 32</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -330,11 +368,12 @@
   <div class="actions">
     <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;">
     <input type="file" id="galleryInput" accept="image/*" style="display:none;">
-    <button class="btn btn-ghost" id="cameraBtn">📷 צילום ישיר</button>
-    <button class="btn btn-ghost" id="galleryBtn">🖼️ העלאה מהגלריה</button>
+    <button class="btn btn-ghost mgr-only" id="cameraBtn">📷 צילום ישיר</button>
+    <button class="btn btn-ghost mgr-only" id="galleryBtn">🖼️ העלאה מהגלריה</button>
     <input type="file" id="pdfInput" style="display:none;">
-    <button class="btn btn-ghost" id="pdfBtn">📄 ייבוא מקובץ PDF תדירות</button>
-    <button class="btn btn-primary" id="printBtn">🖨️ הפקת PDF מחולק</button>
+    <button class="btn btn-ghost mgr-only" id="pdfBtn">📄 ייבוא מקובץ PDF תדירות</button>
+    <button class="btn btn-primary mgr-only" id="printBtn">🖨️ הפקת PDF מחולק</button>
+    <button class="btn btn-ghost mgr-only" id="exceptBtn">⚠️ חריגים</button>
     <button class="btn btn-ghost mgr-only" id="remindBtn">💬 תזכורת</button>
     <button class="btn btn-ghost mgr-only" id="weekBtn">📊 סיכום שבועי</button>
     <button class="btn btn-ghost mgr-only" id="staffBtn">👩‍⚕️ מטפלים</button>
@@ -343,6 +382,7 @@
 </div>
 
 <div class="status-strip no-print" id="statusStrip"></div>
+<div class="ther-bar no-print" id="therBar"></div>
 
 <div class="board no-print" id="board"></div>
 
@@ -424,6 +464,7 @@ window.addEventListener('unhandledrejection', function(e){
   const els={
     board:document.getElementById('board'),
     statusStrip:document.getElementById('statusStrip'),
+    therBar:document.getElementById('therBar'),
     dateLabel:document.getElementById('dateLabel'),
     prevDay:document.getElementById('prevDay'),
     nextDay:document.getElementById('nextDay'),
@@ -435,6 +476,7 @@ window.addEventListener('unhandledrejection', function(e){
     pdfBtn:document.getElementById('pdfBtn'),
     printBtn:document.getElementById('printBtn'),
     roleBtn:document.getElementById('roleBtn'),
+    exceptBtn:document.getElementById('exceptBtn'),
     remindBtn:document.getElementById('remindBtn'),
     weekBtn:document.getElementById('weekBtn'),
     staffBtn:document.getElementById('staffBtn'),
@@ -443,9 +485,102 @@ window.addEventListener('unhandledrejection', function(e){
 
   let currentDate = new Date();
   let day = null; // {date, columns:[{id,therapist,done,patients:[{id,name,freq,note}]}]}
+  let baseDay = null; // last version known to be on the server (for 3-way merge)
   let saveTimer = null;
   let unsubscribeSnapshot = null;
   let lastSavedStr = null;
+  let saving = false, resaveNeeded = false;
+  let renderPending = false;
+
+  // ---------- Safe multi-device merge ----------
+  // Several therapists save the same day document at the same time from their phones.
+  // Instead of overwriting the whole document, every save/receive does a 3-way merge:
+  // only the fields THIS device changed (local vs base) override the server copy.
+  function clone(o){ return o==null ? o : JSON.parse(JSON.stringify(o)); }
+  function stableStr(v){
+    if(v===undefined || v===null) return 'null';
+    if(Array.isArray(v)) return '['+v.map(stableStr).join(',')+']';
+    if(typeof v==='object') return '{'+Object.keys(v).filter(k=>v[k]!==undefined).sort().map(k=>JSON.stringify(k)+':'+stableStr(v[k])).join(',')+'}';
+    return JSON.stringify(v);
+  }
+  function same(a,b){ return stableStr(a) === stableStr(b); }
+  function keyOf(item, i){ return (item && item.id) ? String(item.id) : ('#'+i); }
+  function mergeFields(b, l, r, listKey, childKey){
+    const out = {};
+    const keys = new Set([...Object.keys(l||{}), ...Object.keys(r||{})]);
+    keys.forEach(k=>{
+      if(k===listKey){
+        out[k] = mergeList((b&&b[k])||[], (l&&l[k])||[], (r&&r[k])||[], childKey);
+        return;
+      }
+      const lHas = l && Object.prototype.hasOwnProperty.call(l,k);
+      const changedLocally = lHas && !same(l[k], b ? b[k] : undefined);
+      out[k] = clone(changedLocally ? l[k] : (r && Object.prototype.hasOwnProperty.call(r,k) ? r[k] : l[k]));
+    });
+    return out;
+  }
+  function mergeList(bList, lList, rList, childKey){
+    const bMap=new Map(), lMap=new Map(), rMap=new Map();
+    bList.forEach((x,i)=>bMap.set(keyOf(x,i),x));
+    lList.forEach((x,i)=>lMap.set(keyOf(x,i),x));
+    rList.forEach((x,i)=>rMap.set(keyOf(x,i),x));
+    // Did this device reorder items? Then its order wins, otherwise the server's.
+    const bOrder = bList.map(keyOf).filter(k=>lMap.has(k));
+    const lOrder = lList.map(keyOf).filter(k=>bMap.has(k));
+    const localReordered = !same(bOrder, lOrder);
+    const primary = localReordered ? lList.map(keyOf) : rList.map(keyOf);
+    const secondary = localReordered ? rList.map(keyOf) : lList.map(keyOf);
+    const order = [...primary];
+    secondary.forEach(k=>{ if(!order.includes(k)) order.push(k); });
+    const out = [];
+    order.forEach(k=>{
+      const b=bMap.get(k), l=lMap.get(k), r=rMap.get(k);
+      if(b && !l) return;            // deleted on this device
+      if(b && !r) return;            // deleted on another device
+      if(l && r){ out.push(childKey ? mergeFields(b,l,r,childKey,null) : mergeFields(b,l,r,null,null)); return; }
+      out.push(clone(l || r));       // newly added on one side
+    });
+    return out;
+  }
+  function mergeDay(base, local, remote){
+    if(!remote) return clone(local);
+    if(!local) return clone(remote);
+    return mergeFields(base||{columns:[]}, local, remote, 'columns', 'patients');
+  }
+  // Copy `src` into the live `day` object, keeping existing objects (so input fields
+  // that are being typed into keep pointing at the right patient).
+  function syncObj(dst, src, listKey, childKey){
+    Object.keys(dst).forEach(k=>{ if(!(k in src)) delete dst[k]; });
+    Object.keys(src).forEach(k=>{
+      if(k===listKey){ dst[k] = syncList(dst[k]||[], src[k]||[], childKey); }
+      else dst[k] = src[k];
+    });
+    return dst;
+  }
+  function syncList(dstList, srcList, childKey){
+    const m=new Map(); dstList.forEach((x,i)=>m.set(keyOf(x,i),x));
+    return srcList.map((s,i)=>{
+      const ex = m.get(keyOf(s,i));
+      return ex ? syncObj(ex, s, childKey, null) : s;
+    });
+  }
+  function applyIntoDay(src){
+    if(!day || day.date!==src.date){ day = src; return; }
+    syncObj(day, src, 'columns', 'patients');
+  }
+  function isEditingText(){
+    const a=document.activeElement;
+    return !!(a && els.board.contains(a) && (a.tagName==='TEXTAREA' || (a.tagName==='INPUT' && !a.readOnly)));
+  }
+  // Re-draw unless the user is in the middle of typing (re-drawing would close the phone keyboard).
+  function safeRender(){
+    if(isEditingText()){ renderPending = true; return; }
+    renderPending = false;
+    render();
+  }
+  els.board.addEventListener('focusout', ()=>{
+    setTimeout(()=>{ if(renderPending && !isEditingText()){ renderPending=false; render(); } }, 700);
+  });
 
   function fmtDateKey(d){
     return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -470,22 +605,53 @@ window.addEventListener('unhandledrejection', function(e){
   }
 
   async function saveDay(){
+    saveTimer = null;
     if(!FIREBASE_READY){
       showToast('⚠️ Firebase עוד לא מחובר — ערכו את firebaseConfig בקובץ');
       return;
     }
     if(!day) return;
-    const dataStr = JSON.stringify(day);
-    lastSavedStr = dataStr;
+    if(saving){ resaveNeeded = true; return; }
+    saving = true;
+    const sentLocal = clone(day);          // what this device has right now
+    const sentBase  = clone(baseDay);
+    const key = sentLocal.date;
+    let written = null;
     try{
       await fbAuthReady;
-      await fbDb.collection('schedules').doc(day.date).set(JSON.parse(dataStr));
+      const ref = fbDb.collection('schedules').doc(key);
+      try{
+        await fbDb.runTransaction(async tx=>{
+          const snap = await tx.get(ref);
+          written = mergeDay(sentBase, sentLocal, snap.exists ? snap.data() : null);
+          tx.set(ref, written);
+        });
+      }catch(txErr){
+        // Offline / transaction unavailable — fall back to a plain write.
+        console.warn('transaction failed, plain write', txErr);
+        written = sentLocal;
+        await ref.set(clone(written));
+      }
+      if(day && day.date === key){
+        baseDay = clone(written);
+        lastSavedStr = stableStr(written);
+        // Keep anything typed while the save was in flight.
+        const merged = mergeDay(sentLocal, day, written);
+        const changed = !same(merged, day);
+        applyIntoDay(merged);
+        if(changed) safeRender();
+      }
     }catch(e){
       showToast('שגיאה בשמירה: '+(e && e.message ? e.message : String(e)));
+    }finally{
+      saving = false;
+      if(resaveNeeded){ resaveNeeded=false; scheduleSave(); }
     }
   }
 
   function goTo(date){
+    // Flush a pending save of the day we are leaving before switching.
+    if(saveTimer){ clearTimeout(saveTimer); saveDay(); }
     currentDate = date;
     els.dateLabel.textContent = fmtDateLabel(currentDate);
     const key = fmtDateKey(currentDate);
@@ -493,6 +659,7 @@ window.addEventListener('unhandledrejection', function(e){
 
     // Render immediately — the app is usable right away, no waiting for the network.
     day = emptyDay(key);
+    baseDay = emptyDay(key);
     lastSavedStr = null;
     render();
 
@@ -513,17 +680,23 @@ window.addEventListener('unhandledrejection', function(e){
     }, 10000);
 
     Promise.resolve(fbAuthReady).then(()=>{
+      if(fmtDateKey(currentDate)!==key) return;   // user already moved to another day
       unsubscribeSnapshot = fbDb.collection('schedules').doc(key).onSnapshot(snap=>{
         settled = true;
         clearTimeout(watchdog);
         setSyncStatus('online', 'מסונכרן');
-        const incomingStr = snap.exists ? JSON.stringify(snap.data()) : null;
+        if(!day || day.date!==key) return;
+        const incomingStr = snap.exists ? stableStr(snap.data()) : null;
         if(incomingStr === lastSavedStr) return; // our own write echoing back — ignore
-        // Don't wipe local edits made while offline with an empty remote doc
-        if(!snap.exists && day && day.columns && day.columns.length) return;
-        day = snap.exists ? snap.data() : emptyDay(key);
+        if(!snap.exists) return;                  // nothing on the server yet — keep local
+        const remote = snap.data();
+        // Bring in other people's changes, keep this device's unsaved ones.
+        const merged = mergeDay(baseDay, day, remote);
+        baseDay = clone(remote);
         lastSavedStr = incomingStr;
-        render();
+        applyIntoDay(merged);
+        if(!same(merged, remote)) scheduleSave();  // we still have local changes to push
+        safeRender();
       }, err=>{
         settled = true;
         clearTimeout(watchdog);
@@ -551,6 +724,8 @@ window.addEventListener('unhandledrejection', function(e){
     el.textContent = icon+' '+text;
   }
 
+  els.dateLabel.onclick=()=>{ if(fmtDateKey(currentDate)!==fmtDateKey(new Date())) goTo(new Date()); };
+  els.dateLabel.title='לחיצה — חזרה להיום';
   els.prevDay.onclick=()=>{ const d=new Date(currentDate); d.setDate(d.getDate()-1); goTo(d); };
   els.nextDay.onclick=()=>{ const d=new Date(currentDate); d.setDate(d.getDate()+1); goTo(d); };
 
@@ -589,7 +764,39 @@ window.addEventListener('unhandledrejection', function(e){
     renderBoard();
   }
 
+  // "Show only my column" — remembered per device, so each therapist's phone opens on their own list.
+  let myTher = '';
+  try{ myTher = localStorage.getItem('imacs_my_ther') || ''; }catch(e){}
+  function setMyTher(name){
+    myTher = name || '';
+    try{ localStorage.setItem('imacs_my_ther', myTher); }catch(e){}
+    render();
+    window.scrollTo({top:0});
+  }
+  function visibleColumns(){
+    if(!myTher) return day.columns;
+    const mine = day.columns.filter(c=>(c.therapist||'').trim()===myTher);
+    return mine.length ? mine : day.columns;
+  }
+  function renderTherBar(){
+    const names = day.columns.map(c=>(c.therapist||'').trim()).filter(Boolean);
+    if(names.length < 2){ els.therBar.innerHTML=''; els.therBar.style.display='none'; return; }
+    els.therBar.style.display='';
+    const active = (myTher && names.includes(myTher)) ? myTher : '';
+    const chip = (name,label,cls)=>`<button class="ther-chip${cls}" data-name="${escapeHtml(name)}">${label}</button>`;
+    let html = '<span class="ther-bar-label">הצג:</span>' + chip('', 'כולם', active===''?' sel':'');
+    day.columns.forEach(c=>{
+      const n=(c.therapist||'').trim(); if(!n) return;
+      html += chip(n, (c.done?'✔ ':'')+escapeHtml(n), (active===n?' sel':'')+(c.done?' done':''));
+    });
+    els.therBar.innerHTML = html;
+    els.therBar.querySelectorAll('.ther-chip').forEach(b=>{ b.onclick=()=>setMyTher(b.dataset.name); });
+    const sel = els.therBar.querySelector('.ther-chip.sel');
+    if(sel && sel.scrollIntoView) sel.scrollIntoView({block:'nearest', inline:'center'});
+  }
+
   function renderStatusStrip(){
+    renderTherBar();
     if(!day.columns.length){ els.statusStrip.innerHTML=''; return; }
     const total = day.columns.length;
     const doneCols = day.columns.filter(c=>c.done);
@@ -607,19 +814,26 @@ window.addEventListener('unhandledrejection', function(e){
       els.board.innerHTML = `
         <div class="empty-state" style="width:100%;">
           <h2>אין עדיין לו״ז ליום הזה</h2>
-          <p>העלו תמונה של דף הלו״ז המודפס ואני אזהה אוטומטית את שמות המטפלים והמטופלים — או הוסיפו עמודה ידנית.</p>
-          <button class="btn btn-outline" id="manualAddBtn">➕ הוספת עמודת מטפל ידנית</button>
+          ${IS_MANAGER
+            ? `<p>ייבאו את דוח התדירות (PDF) או הוסיפו עמודה ידנית.</p>
+               <button class="btn btn-outline" id="manualAddBtn">➕ הוספת עמודת מטפל ידנית</button>`
+            : `<p>המנהל עוד לא העלה את הרשימה להיום. כשהיא תעלה היא תופיע כאן אוטומטית.</p>`}
         </div>`;
-      document.getElementById('manualAddBtn').onclick=()=>{ addColumn(); render(); };
+      const mab=document.getElementById('manualAddBtn');
+      if(mab) mab.onclick=()=>{ addColumn(); render(); };
       return;
     }
     els.board.innerHTML='';
-    day.columns.forEach(col=>els.board.appendChild(renderColumn(col)));
-    const addBtn=document.createElement('button');
-    addBtn.className='add-column';
-    addBtn.textContent='➕ עמודת מטפל';
-    addBtn.onclick=()=>{ addColumn(); render(); };
-    els.board.appendChild(addBtn);
+    const cols = visibleColumns();
+    els.board.classList.toggle('single', cols.length===1);
+    cols.forEach(col=>els.board.appendChild(renderColumn(col)));
+    if(IS_MANAGER && cols.length===day.columns.length){
+      const addBtn=document.createElement('button');
+      addBtn.className='add-column';
+      addBtn.textContent='➕ עמודת מטפל';
+      addBtn.onclick=()=>{ addColumn(); render(); };
+      els.board.appendChild(addBtn);
+    }
   }
 
   // A patient counts as filled if EITHER an actual frequency (circle) was chosen
@@ -664,6 +878,7 @@ window.addEventListener('unhandledrejection', function(e){
     nameInput.value=col.therapist||'';
     nameInput.placeholder='שם המטפל';
     nameInput.oninput=()=>{ col.therapist=nameInput.value; scheduleSave(); };
+    if(!IS_MANAGER) nameInput.readOnly = true;
     const delColBtn=document.createElement('button');
     delColBtn.className='del-col'; delColBtn.textContent='✕';
     delColBtn.title='מחיקת עמודה';
@@ -678,7 +893,8 @@ window.addEventListener('unhandledrejection', function(e){
     const filled = col.patients.filter(p=>!isIncomplete(p)).length;
     countBadge.textContent = filled+'/'+col.patients.length;
     countBadge.title = 'מולאו '+filled+' מתוך '+col.patients.length+' מטופלים';
-    tab.appendChild(nameInput); tab.appendChild(countBadge); tab.appendChild(delColBtn);
+    tab.appendChild(nameInput); tab.appendChild(countBadge);
+    if(IS_MANAGER) tab.appendChild(delColBtn);
     wrap.appendChild(tab);
 
     const plist=document.createElement('div');
@@ -724,6 +940,10 @@ window.addEventListener('unhandledrejection', function(e){
         if(empty) parts.push(`${empty} ריקים`);
         if(needNote) parts.push(`${needNote} ללא הסבר`);
         showToast('⚠️ נותרו: '+parts.join(', '));
+        setTimeout(()=>{
+          const first=document.querySelector('.patient.missing');
+          if(first) first.scrollIntoView({behavior:'smooth', block:'center'});
+        }, 50);
       }else{
         col.showMissing = false;
         col.done = true;
@@ -794,7 +1014,9 @@ window.addEventListener('unhandledrejection', function(e){
     nameInput.oninput=()=>{ p.name=nameInput.value; scheduleSave(); };
     const delBtn=document.createElement('button');
     delBtn.className='del-p'; delBtn.textContent='✕';
+    delBtn.title='מחיקת מטופל';
     delBtn.onclick=()=>{
+      if(!confirm('למחוק את '+((p.name||'').trim()||'המטופל')+' מהרשימה?')) return;
       col.patients=col.patients.filter(x=>x.id!==p.id);
       scheduleSave(); render();
     };
@@ -994,11 +1216,11 @@ window.addEventListener('unhandledrejection', function(e){
   // ---------- Photo import via Claude vision ----------
   let pendingDataUrl=null, pendingMediaType=null, pendingRotation=0, cachedRotatedDataUrl=null;
 
-  els.cameraBtn.onclick=()=>els.cameraInput.click();
-  els.galleryBtn.onclick=()=>els.galleryInput.click();
+  els.cameraBtn.onclick=()=>{ if(IS_MANAGER) els.cameraInput.click(); };
+  els.galleryBtn.onclick=()=>{ if(IS_MANAGER) els.galleryInput.click(); };
   els.cameraInput.onchange=(e)=>handlePickedFile(e, els.cameraInput);
   els.galleryInput.onchange=(e)=>handlePickedFile(e, els.galleryInput);
-  els.pdfBtn.onclick=()=>els.pdfInput.click();
+  els.pdfBtn.onclick=()=>{ if(IS_MANAGER) els.pdfInput.click(); };
 
   function refreshRoleBtn(){
     els.roleBtn.textContent = IS_MANAGER ? '🔓 מנהל' : '🔒 צוות';
@@ -1782,8 +2004,74 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
     document.getElementById('closeStaff').onclick=()=>m.remove();
   };
 
+  // ---------- Manager: exceptions report ----------
+  function collectExceptions(){
+    const out=[];
+    ((day&&day.columns)||[]).forEach(c=>{
+      (c.patients||[]).forEach(p=>{
+        let why=null;
+        if(p.freq==='R') why='סומן R';
+        else if(typeof p.freq==='number' && p.recommended!==null && p.recommended!==undefined && p.freq!==p.recommended){
+          why='מומלץ '+p.recommended+' · בפועל '+p.freq;
+        }
+        if(why) out.push({therapist:(c.therapist||'ללא שם'), patient:(p.name||''), why, note:(p.note||'').trim()});
+      });
+    });
+    return out;
+  }
+  function exceptionsTableHtml(list){
+    const groups={};
+    list.forEach(e=>{(groups[e.therapist]=groups[e.therapist]||[]).push(e);});
+    return Object.keys(groups).map(t=>`
+      <div class="ex-group"><h3>${escapeHtml(t)} <span>(${groups[t].length})</span></h3>
+      <table><tr><th>מטופל</th><th>מה לא תקין</th><th>הערה</th></tr>
+      ${groups[t].map(e=>`<tr class="${e.why==='סומן R'?'ex-r':'ex-mm'}"><td>${escapeHtml(e.patient)}</td><td>${escapeHtml(e.why)}</td><td>${escapeHtml(e.note)}</td></tr>`).join('')}
+      </table></div>`).join('');
+  }
+  const EX_CSS=`.ex-group{margin-bottom:16px;} .ex-group h3{margin:0 0 4px;font-size:16px;border-bottom:2px solid #152238;padding-bottom:3px;} .ex-group h3 span{font-weight:400;color:#777;font-size:13px;}
+    .ex-group table{width:100%;border-collapse:collapse;font-size:14px;} .ex-group th,.ex-group td{border:1px solid #ddd;padding:6px 8px;text-align:right;} .ex-group th{background:#f0f0f0;}
+    .ex-mm td:nth-child(2){color:#c14545;font-weight:700;} .ex-r td:nth-child(2){color:#7b4fb0;font-weight:700;}`;
+  els.exceptBtn.onclick=()=>{
+    if(!IS_MANAGER) return;
+    if(!day || !day.columns || !day.columns.length){ showToast('אין נתונים ליום הזה'); return; }
+    const list=collectExceptions();
+    const dateLbl=fmtDateLabel(currentDate);
+    const textMsg=`חריגים — ${dateLbl}\n`+(list.length? '\n'+Object.entries(list.reduce((g,e)=>((g[e.therapist]=g[e.therapist]||[]).push(e),g),{})).map(([t,arr])=>
+      t+':\n'+arr.map(e=>`• ${e.patient} — ${e.why}${e.note?' ('+e.note+')':''}`).join('\n')).join('\n\n') : '\nאין חריגים 🎉');
+    const old=document.getElementById('exceptModal'); if(old) old.remove();
+    const m=document.createElement('div');
+    m.id='exceptModal'; m.className='modal-bg no-print';
+    m.innerHTML=`<div class="crop-modal" style="max-width:640px;"><style>#exceptModal{${''}} ${EX_CSS.replace(/\.ex-/g,'#exceptModal .ex-')}</style>
+      <h3>⚠️ חריגים — ${escapeHtml(dateLbl)}</h3>
+      <p class="hint">${list.length? list.length+' מטופלים לא תקינים (שונה מהמומלצת או R)':'הכול תקין'}</p>
+      <div class="crop-wrap" style="background:#fff;text-align:right;"><div style="width:100%;max-height:52vh;overflow:auto;padding:6px;">${list.length?exceptionsTableHtml(list):'<p style="text-align:center;padding:20px;">🎉 אין חריגים</p>'}</div></div>
+      <div class="crop-actions">
+        <button class="btn btn-outline" id="exClose">סגירה</button>
+        <button class="btn btn-outline" id="exCopy">📋 העתק</button>
+        <button class="btn btn-primary" id="exPrint">🖨️ הפק PDF</button>
+      </div></div>`;
+    document.body.appendChild(m);
+    document.getElementById('exClose').onclick=()=>m.remove();
+    document.getElementById('exCopy').onclick=async ()=>{
+      try{ await navigator.clipboard.writeText(textMsg); showToast('הועתק'); }
+      catch(e){ window.prompt('העתק:',textMsg); }
+    };
+    document.getElementById('exPrint').onclick=()=>{
+      const html=`<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><title>חריגים ${escapeHtml(fmtDateKey(currentDate))}</title>
+<style>body{font-family:'Heebo',Arial,sans-serif;padding:24px;color:#152238;} h1{font-size:20px;} ${EX_CSS} @media print{.hb{display:none}}</style></head><body>
+<div class="hb" style="background:#eef1f4;padding:8px;text-align:center;font-size:13px;margin-bottom:12px;">Ctrl/Cmd+P ← שמירה כ-PDF</div>
+<h1>דו״ח חריגים — ${escapeHtml(dateLbl)}</h1>${list.length?exceptionsTableHtml(list):'<p>אין חריגים</p>'}</body></html>`;
+      const blob=new Blob([html],{type:'text/html'});
+      const url=URL.createObjectURL(blob);
+      const w=window.open(url,'_blank');
+      if(!w){ const a=document.createElement('a'); a.href=url; a.download='חריגים_'+fmtDateKey(currentDate)+'.html'; document.body.appendChild(a); a.click(); a.remove(); }
+      setTimeout(()=>URL.revokeObjectURL(url),4000);
+    };
+  };
+
   // ---------- Print / split PDF ----------
   els.printBtn.onclick=()=>{
+    if(!IS_MANAGER) return;
     if(!day || !day.columns || !day.columns.length){ showToast('אין עדיין נתונים ליום הזה'); return; }
     showPdfPreviewModal();
   };
@@ -1883,116 +2171,4 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
               #pdfPreviewModal td.bal-cell.debt-high{background:#c14545 !important;color:#fff !important;}
               #pdfPreviewModal td.bal-cell.debt{color:#c98a2e;}
               #pdfPreviewModal td.bal-cell.credit{color:#22685f;}
-              #pdfPreviewModal td.bal-cell.zero,#pdfPreviewModal td.bal-cell.none{color:#9aa3b0;}
-              #pdfPreviewModal .print-date{font-size:11px;color:#777;}
-            </style>
-            ${colsHtml}
-          </div>
-        </div>
-        <div class="crop-actions">
-          <button class="btn btn-outline" id="pdfPreviewCancel">✕ ביטול, לא להפיק</button>
-          <button class="btn btn-primary" id="pdfPreviewConfirm">✔ מאשר — הפק PDF</button>
-        </div>
-      </div>`;
-    document.body.appendChild(m);
-    document.getElementById('pdfPreviewCancel').onclick=()=>m.remove();
-    document.getElementById('pdfPreviewConfirm').onclick=()=>{
-      m.remove();
-      downloadPrintableFile();
-    };
-  }
-
-  async function downloadPrintableFile(){
-    const colsHtml = buildColsHtml(false);
-
-    const fullHtml = `<!DOCTYPE html>
-<html lang="he" dir="rtl"><head><meta charset="UTF-8">
-<title>תדירות ${escapeHtml(fmtDateKey(currentDate))}</title>
-<style>
-  body{font-family:'Heebo',Arial,sans-serif;margin:0;color:#152238;}
-  .print-col{page-break-after:always;padding:28px;}
-  .print-col:last-child{page-break-after:auto;}
-  .print-col h2{font-family:'Rubik',Arial,sans-serif;border-bottom:3px solid #152238;padding-bottom:8px;}
-  .print-col table{width:100%;border-collapse:collapse;margin-top:14px;}
-  .print-col th,.print-col td{border:1px solid #ccc;padding:8px 10px;text-align:right;font-size:15px;}
-  .print-col th{background:#f0f0f0;}
-  .print-col tr.mismatch-row td{background:#fbe9e9;color:#c14545;font-weight:700;
-    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .print-col tr.mismatch-row td:first-child{background:#c14545;color:#fff;font-weight:800;
-    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .print-col tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
-  .print-col tr.bright-row td{background:#dcffd6;color:#0f8a08;font-weight:700;}
-  .print-col td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
-  .print-col td.clin-cell{font-weight:700;}
-  .print-col td.clin-cell.acute{background:#c14545 !important;color:#fff !important;
-    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .print-col td.clin-cell.slow{background:#fbf1de;color:#c98a2e;
-    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .print-col td.bal-cell{direction:ltr;font-weight:700;}
-  .print-col td.bal-cell.debt-high{background:#c14545 !important;color:#fff !important;
-    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .print-col td.bal-cell.debt{color:#c98a2e;}
-  .print-col td.bal-cell.credit{color:#22685f;}
-  .print-col td.bal-cell.zero,.print-col td.bal-cell.none{color:#9aa3b0;}
-  .print-date{color:#555;font-size:13px;margin-bottom:2px;}
-  .hint-bar{background:#eef1f4;color:#4a5670;padding:10px 16px;font-size:13px;text-align:center;}
-  @media print{ .hint-bar{display:none;} }
-</style></head>
-<body>
-<div class="hint-bar">קובץ מוכן להדפסה — לחצו Ctrl/Cmd+P ובחרו "שמירה כ-PDF" כדי לייצא PDF מחולק לפי עמודות. אדום = אי-התאמה (או סימון *). סגול = מסומן R. ירוק = מ / פה / א. כתום = המטופל עוד צריך לקבוע פגישות השבוע. יתרה באדום = חוב מעל 400 · מספר עם "-" = זכות למטופל · "לתשומת לב המנהל": אדום = לא מתקדם/אקוטי (עדיפות גבוהה), כתום = התקדמות איטית</div>
-${colsHtml}
-</body></html>`;
-
-    const blob = new Blob([fullHtml], {type:'text/html'});
-    const filename = `תדירות_${fmtDateKey(currentDate)}.html`;
-
-    // 1) Try native share sheet (works well on mobile, even inside embedded previews)
-    try{
-      const file = new File([blob], filename, {type:'text/html'});
-      if(navigator.canShare && navigator.canShare({files:[file]})){
-        await navigator.share({files:[file], title:'תדירות '+fmtDateKey(currentDate)});
-        showToast('נשלח לשיתוף — פתחו את הקובץ ולחצו הדפסה כדי לשמור כ-PDF');
-        return;
-      }
-    }catch(shareErr){
-      // user cancelled share or share failed — fall through to next method
-    }
-
-    // 2) Try opening in a new tab so the user can print/save from there
-    try{
-      const url = URL.createObjectURL(blob);
-      const win = window.open(url, '_blank');
-      if(win){
-        showToast('נפתח בכרטיסייה חדשה — לחצו הדפסה ← שמירה כ-PDF');
-        setTimeout(()=>URL.revokeObjectURL(url), 4000);
-        return;
-      }
-      URL.revokeObjectURL(url);
-    }catch(openErr){ /* fall through */ }
-
-    // 3) Fallback: direct download link
-    try{
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(()=>URL.revokeObjectURL(url), 2000);
-      showToast('הקובץ ירד — פתחו אותו ולחצו הדפסה כדי לשמור כ-PDF');
-    }catch(dlErr){
-      showToast('לא הצלחתי להפיק את הקובץ כאן. נסו לפתוח את הכלי בכרטיסייה מלאה של הדפדפן ולנסות שוב.');
-    }
-  }
-
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
-
-  // ---------- init ----------
-  goTo(new Date());
-})();
-</script>
-</body>
-</html>
+              #pdfPreviewModal td.bal-c
