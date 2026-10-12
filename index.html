@@ -2169,4 +2169,120 @@ Preserve Hebrew names exactly as written. If a name is genuinely illegible, use 
               #pdfPreviewModal td.clin-cell{font-weight:700;}
               #pdfPreviewModal td.clin-cell.acute{background:#c14545 !important;color:#fff !important;}
               #pdfPreviewModal td.clin-cell.slow{background:#fbf1de;color:#c98a2e;}
-              #pdfPreviewModal td.bal-cell{direction:ltr;font-weight:700;
+              #pdfPreviewModal td.bal-cell{direction:ltr;font-weight:700;}
+              #pdfPreviewModal td.bal-cell.debt-high{background:#c14545 !important;color:#fff !important;}
+              #pdfPreviewModal td.bal-cell.debt{color:#c98a2e;}
+              #pdfPreviewModal td.bal-cell.credit{color:#22685f;}
+              #pdfPreviewModal td.bal-cell.zero,#pdfPreviewModal td.bal-cell.none{color:#9aa3b0;}
+              #pdfPreviewModal .print-date{font-size:11px;color:#777;}
+            </style>
+            ${colsHtml}
+          </div>
+        </div>
+        <div class="crop-actions">
+          <button class="btn btn-outline" id="pdfPreviewCancel">✕ ביטול, לא להפיק</button>
+          <button class="btn btn-primary" id="pdfPreviewConfirm">✔ מאשר — הפק PDF</button>
+        </div>
+      </div>`;
+    document.body.appendChild(m);
+    document.getElementById('pdfPreviewCancel').onclick=()=>m.remove();
+    document.getElementById('pdfPreviewConfirm').onclick=()=>{
+      m.remove();
+      downloadPrintableFile();
+    };
+  }
+
+  async function downloadPrintableFile(){
+    const colsHtml = buildColsHtml(false);
+
+    const fullHtml = `<!DOCTYPE html>
+<html lang="he" dir="rtl"><head><meta charset="UTF-8">
+<title>תדירות ${escapeHtml(fmtDateKey(currentDate))}</title>
+<style>
+  body{font-family:'Heebo',Arial,sans-serif;margin:0;color:#152238;}
+  .print-col{page-break-after:always;padding:28px;}
+  .print-col:last-child{page-break-after:auto;}
+  .print-col h2{font-family:'Rubik',Arial,sans-serif;border-bottom:3px solid #152238;padding-bottom:8px;}
+  .print-col table{width:100%;border-collapse:collapse;margin-top:14px;}
+  .print-col th,.print-col td{border:1px solid #ccc;padding:8px 10px;text-align:right;font-size:15px;}
+  .print-col th{background:#f0f0f0;}
+  .print-col tr.mismatch-row td{background:#fbe9e9;color:#c14545;font-weight:700;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .print-col tr.mismatch-row td:first-child{background:#c14545;color:#fff;font-weight:800;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .print-col tr.r-row td{background:#f1eaf9;color:#7b4fb0;font-weight:700;}
+  .print-col tr.bright-row td{background:#dcffd6;color:#0f8a08;font-weight:700;}
+  .print-col td.pending-cell{background:#fbf1de;color:#c98a2e;font-weight:700;}
+  .print-col td.clin-cell{font-weight:700;}
+  .print-col td.clin-cell.acute{background:#c14545 !important;color:#fff !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .print-col td.clin-cell.slow{background:#fbf1de;color:#c98a2e;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .print-col td.bal-cell{direction:ltr;font-weight:700;}
+  .print-col td.bal-cell.debt-high{background:#c14545 !important;color:#fff !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .print-col td.bal-cell.debt{color:#c98a2e;}
+  .print-col td.bal-cell.credit{color:#22685f;}
+  .print-col td.bal-cell.zero,.print-col td.bal-cell.none{color:#9aa3b0;}
+  .print-date{color:#555;font-size:13px;margin-bottom:2px;}
+  .hint-bar{background:#eef1f4;color:#4a5670;padding:10px 16px;font-size:13px;text-align:center;}
+  @media print{ .hint-bar{display:none;} }
+</style></head>
+<body>
+<div class="hint-bar">קובץ מוכן להדפסה — לחצו Ctrl/Cmd+P ובחרו "שמירה כ-PDF" כדי לייצא PDF מחולק לפי עמודות. אדום = אי-התאמה (או סימון *). סגול = מסומן R. ירוק = מ / פה / א. כתום = המטופל עוד צריך לקבוע פגישות השבוע. יתרה באדום = חוב מעל 400 · מספר עם "-" = זכות למטופל · "לתשומת לב המנהל": אדום = לא מתקדם/אקוטי (עדיפות גבוהה), כתום = התקדמות איטית</div>
+${colsHtml}
+</body></html>`;
+
+    const blob = new Blob([fullHtml], {type:'text/html'});
+    const filename = `תדירות_${fmtDateKey(currentDate)}.html`;
+
+    // 1) Try native share sheet (works well on mobile, even inside embedded previews)
+    try{
+      const file = new File([blob], filename, {type:'text/html'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title:'תדירות '+fmtDateKey(currentDate)});
+        showToast('נשלח לשיתוף — פתחו את הקובץ ולחצו הדפסה כדי לשמור כ-PDF');
+        return;
+      }
+    }catch(shareErr){
+      // user cancelled share or share failed — fall through to next method
+    }
+
+    // 2) Try opening in a new tab so the user can print/save from there
+    try{
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, '_blank');
+      if(win){
+        showToast('נפתח בכרטיסייה חדשה — לחצו הדפסה ← שמירה כ-PDF');
+        setTimeout(()=>URL.revokeObjectURL(url), 4000);
+        return;
+      }
+      URL.revokeObjectURL(url);
+    }catch(openErr){ /* fall through */ }
+
+    // 3) Fallback: direct download link
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url), 2000);
+      showToast('הקובץ ירד — פתחו אותו ולחצו הדפסה כדי לשמור כ-PDF');
+    }catch(dlErr){
+      showToast('לא הצלחתי להפיק את הקובץ כאן. נסו לפתוח את הכלי בכרטיסייה מלאה של הדפדפן ולנסות שוב.');
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- init ----------
+  goTo(new Date());
+})();
+</script>
+</body>
+</html>
