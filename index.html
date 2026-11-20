@@ -358,7 +358,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 34</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 35</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -371,7 +371,7 @@
     <button class="btn btn-ghost mgr-only" id="cameraBtn">📷 צילום ישיר</button>
     <button class="btn btn-ghost mgr-only" id="galleryBtn">🖼️ העלאה מהגלריה</button>
     <input type="file" id="pdfInput" style="display:none;">
-    <button class="btn btn-ghost mgr-only" id="pdfBtn">📄 ייבוא מקובץ PDF תדירות</button>
+    <button class="btn btn-ghost mgr-only" id="pdfBtn">📄 ייבוא דוח PDF</button>
     <button class="btn btn-primary mgr-only" id="printBtn">🖨️ הפקת PDF מחולק</button>
     <button class="btn btn-ghost mgr-only" id="exceptBtn">⚠️ חריגים</button>
     <button class="btn btn-ghost mgr-only" id="remindBtn">💬 תזכורת</button>
@@ -1383,6 +1383,179 @@ window.addEventListener('unhandledrejection', function(e){
     return {therapist, patient, freq, balance, date: (tokens[dIdx].match(PDF_DATE_RE)||[null])[0]};
   }
 
+  // ---------- "דוח סוף יום" (end-of-day report) ----------
+  // A different layout from the attendance report: one small table per therapist
+  // ("מטפל: X (N תקינים לא מוצגים)") with the columns סימון | מטופל | תדירות | ריקול |
+  // סטטוס | סיבה, three tables side by side. There are no dates per row, so instead of
+  // reading text rows we use the POSITIONS of the table headers to find each table's
+  // columns. Only the patient name and the "תדירות" column are used.
+  async function extractPdfItems(arrayBuffer){
+    const pdf = await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+    const pages=[];
+    for(let i=1;i<=pdf.numPages;i++){
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      pages.push(content.items.filter(it=>typeof it.str==='string').map(it=>({
+        str:it.str, x:it.transform[4], y:it.transform[5], w:it.width||0
+      })));
+    }
+    return pages;
+  }
+
+  // Some PDFs deliver one glyph per item. If so, glue glyphs back into words
+  // (right-to-left, split on blank gaps) so the rest of the parser sees words.
+  function coalesceGlyphItems(items){
+    const ne = items.filter(i=>i.str && i.str.trim());
+    const heb = ne.filter(i=>/[א-ת]/.test(i.str));
+    const tiny = heb.filter(i=>i.str.trim().length===1);
+    if(ne.length<20 || !heb.length || tiny.length/heb.length < 0.5) return items;
+    const lines=[];
+    items.slice().sort((a,b)=>b.y-a.y).forEach(it=>{
+      const ln = lines.find(l=>Math.abs(l.y-it.y)<=2);
+      if(ln) ln.items.push(it); else lines.push({y:it.y, items:[it]});
+    });
+    const out=[];
+    const GAP=1.2;
+    lines.forEach(ln=>{
+      const gl = ln.items.slice().sort((a,b)=>b.x-a.x);
+      let cur=null;
+      const flush=()=>{
+        if(!cur) return;
+        let s=cur.s;
+        if(!/[א-ת]/.test(s)) s=[...s].reverse().join('');   // digits come out mirrored
+        out.push({str:s, x:cur.left, y:ln.y, w:cur.right-cur.left});
+        cur=null;
+      };
+      gl.forEach(g=>{
+        if(!g.str || !g.str.trim()){ flush(); return; }
+        if(cur && (cur.left - (g.x+g.w)) > GAP) flush();
+        if(!cur) cur={s:'', left:g.x, right:g.x+g.w};
+        cur.s += g.str;
+        cur.left = Math.min(cur.left, g.x);
+      });
+      flush();
+    });
+    return out;
+  }
+
+  function parseEndOfDayReport(pages){
+    const colsMap = new Map();   // therapist -> Map(name -> recommended)
+    let date=null, hidden=0, tables=0;
+    const canon = n=>{
+      const f = findTherapist(n);
+      return (f && hebOnly(f)===hebOnly(n)) ? f : n;
+    };
+    pages.forEach(raw=>{
+      let items = coalesceGlyphItems(raw)
+        .map(i=>({str:(i.str||'').trim(), x:i.x, y:i.y, w:i.w}))
+        .filter(i=>i.str);
+      // If a pdf.js version hands back Hebrew words in visual (mirrored) order, un-mirror them.
+      if(!items.some(i=>i.str==='סימון') && items.some(i=>i.str==='ןומיס')){
+        items = items.map(i=>/[\u05D0-\u05EA]/.test(i.str) ? {x:i.x,y:i.y,w:i.w,str:[...i.str].reverse().join('')} : i);
+      }
+      if(!date){
+        const d = items.find(i=>/^\d{2}\/\d{2}\/\d{4}$/.test(i.str));
+        if(d) date = d.str;
+      }
+      // header lines of the therapist tables: the ones that contain "ריקול"
+      const hdrYs=[];
+      items.filter(i=>i.str==='סימון').forEach(i=>{
+        if(hdrYs.some(y=>Math.abs(y-i.y)<=2)) return;
+        if(items.some(j=>Math.abs(j.y-i.y)<=2 && j.str.includes('ריקול'))) hdrYs.push(i.y);
+      });
+      hdrYs.sort((a,b)=>b-a);   // top table row first
+      const titleYs = items.filter(i=>i.str.startsWith('מטפל:')).map(i=>i.y);
+      hdrYs.forEach(yh=>{
+        const line = items.filter(i=>Math.abs(i.y-yh)<=2);
+        const starts = line.filter(i=>i.str==='סימון').map(i=>i.x+i.w+3).sort((a,b)=>a-b);   // right edge of each table, left→right
+        if(!starts.length) return;
+        const blockOf = it=>{
+          const c = it.x + it.w/2;
+          for(let k=0;k<starts.length;k++){ if(c <= starts[k]+3) return k; }
+          return starts.length-1;
+        };
+        const below = titleYs.filter(y=>y < yh-3);
+        const yLow = below.length ? Math.max(...below)+4 : -Infinity;
+        for(let k=starts.length-1;k>=0;k--){   // right-to-left, like the report reads
+          const hdr = {};
+          const blockLine = line.filter(i=>blockOf(i)===k);
+          blockLine.forEach(i=>{ hdr[i.str]=i.x+i.w/2; });
+          if(hdr['תדירות']===undefined){
+            // glyph-level PDFs can glue the neighbouring headers "תדירות"+"ריקול" into one word
+            const g = blockLine.find(i=>i.str.startsWith('תדירות') && i.str.length>6);
+            if(g) hdr['תדירות'] = (g.x+g.w) - (g.w*6/g.str.length)/2;
+          }
+          if(hdr['תדירות']===undefined || hdr['מטופל']===undefined) continue;
+          // title: "מטפל: NAME (N תקינים לא מוצגים)"
+          const title = items.filter(i=>i.y>yh+3 && i.y<yh+25 && blockOf(i)===k)
+                             .sort((a,b)=>b.x-a.x).map(i=>i.str).join(' ');
+          if(!/מטפל:/.test(title)) continue;
+          const tname = title.replace(/^.*?מטפל:\s*/,'').replace(/\s*\(?\s*\d+\s*\(?\s*תקינים.*$/,'').replace(/\s*\(\s*$/,'').replace(/\s+/g,' ').trim();
+          if(!tname) continue;
+          const therapist = canon(tname);
+          const hm = title.match(/(\d+)[\s()]*תקינים/);
+          if(hm) hidden += Number(hm[1]);
+          tables++;
+
+          const cFreq = hdr['תדירות'];
+          const cells = items.filter(i=>i.y<yh-3 && i.y>yLow && blockOf(i)===k);
+          // patient column: everything to the right of the "תדירות" column except the marker column
+          const patItems = cells.filter(i=>!/^\*+$/.test(i.str) && (i.x+i.w) > cFreq+10);
+          const lines=[];
+          patItems.slice().sort((a,b)=>b.y-a.y).forEach(it=>{
+            const ln = lines.find(l=>Math.abs(l.y-it.y)<=2);
+            if(ln) ln.items.push(it); else lines.push({y:it.y, items:[it]});
+          });
+          // lines of a wrapped name sit ~7 apart; different patients are >= 12 apart
+          const rows=[];
+          lines.forEach(ln=>{
+            const text = ln.items.sort((a,b)=>b.x-a.x).map(i=>i.str).join(' ');
+            const last = rows[rows.length-1];
+            if(last && (last.lastY - ln.y) <= 10){ last.text += ' '+text; last.ys.push(ln.y); last.lastY=ln.y; }
+            else rows.push({text, ys:[ln.y], lastY:ln.y});
+          });
+          rows.forEach(r=>{ r.y = r.ys.reduce((s,v)=>s+v,0)/r.ys.length; r.freq=null; });
+          cells.filter(i=>/^\d$/.test(i.str) && Math.abs(i.x+i.w/2-cFreq)<=7).forEach(i=>{
+            let best=null, bd=9;
+            rows.forEach(r=>{ const d=Math.abs(r.y-i.y); if(d<bd){ bd=d; best=r; } });
+            if(best && best.freq===null) best.freq=Number(i.str);
+          });
+          if(!colsMap.has(therapist)) colsMap.set(therapist, new Map());
+          const m = colsMap.get(therapist);
+          rows.forEach(r=>{
+            const name = r.text.replace(/\s+/g,' ').trim();
+            if(name && !m.has(name)) m.set(name, r.freq);
+          });
+        }
+      });
+    });
+    if(!tables) return null;
+    const columns = Array.from(colsMap.entries()).map(([therapist,m])=>({
+      therapist, patients:Array.from(m.entries()).map(([name,rec])=>({name, recommended:rec}))
+    }));
+    return {date, columns, hidden};
+  }
+
+  function importEndOfDayReport(eod){
+    hideModal();
+    const total = eod.columns.reduce((s,c)=>s+c.patients.length,0);
+    if(!total){
+      showModalError('זיהיתי דוח סוף יום, אבל לא מצאתי בו מטופלים לייבוא.');
+      return;
+    }
+    const v = currentDate;
+    const viewedStr = String(v.getDate()).padStart(2,'0')+'/'+String(v.getMonth()+1).padStart(2,'0')+'/'+v.getFullYear();
+    if(eod.date && eod.date!==viewedStr){
+      if(!confirm('הדוח הוא ליום '+eod.date+', אבל המסך מציג את '+viewedStr+'.\nלעבור ליום '+eod.date+' ולייבא אליו?')) return;
+      const [dd,mm,yy] = eod.date.split('/').map(Number);
+      goTo(new Date(yy,mm-1,dd));
+    }
+    if(day && day.columns && day.columns.length) showMergeChoice(eod.columns, null);
+    else applyExtractedColumns(eod.columns, 'merge', null);
+    showToast('יובאו '+total+' מטופלים של '+eod.columns.length+' מטפלים'
+      + (eod.hidden? ' ('+eod.hidden+' מטופלים תקינים לא מופיעים בדוח)' : ''));
+  }
+
   async function handlePickedPdf(e, inputEl){
     const file=e.target.files[0];
     inputEl.value='';
@@ -1399,6 +1572,10 @@ window.addEventListener('unhandledrejection', function(e){
     showModal();
     try{
       const arrayBuffer = await file.arrayBuffer();
+
+      // "דוח סוף יום" (one table per therapist) has its own reader.
+      const eod = parseEndOfDayReport(await extractPdfItems(arrayBuffer));
+      if(eod){ importEndOfDayReport(eod); return; }
 
       const rows = await extractPdfRows(arrayBuffer);
 
@@ -1715,7 +1892,7 @@ window.addEventListener('unhandledrejection', function(e){
       console.error(err);
       const looksLikeNetworkBlock = err instanceof TypeError || /fetch|network|cors/i.test(err.message||'');
       if(looksLikeNetworkBlock){
-        showModalError('זיהוי תמונה בעזרת AI אינו זמין באתר הזה (הוא דורש מפתח API בתשלום). במקומו השתמשו ב-"📄 ייבוא מקובץ PDF תדירות" — הוא מדויק יותר, חינמי, ועובד כאן מצוין.');
+        showModalError('זיהוי תמונה בעזרת AI אינו זמין באתר הזה (הוא דורש מפתח API בתשלום). במקומו השתמשו ב-"📄 ייבוא דוח PDF" — הוא מדויק יותר, חינמי, ועובד כאן מצוין.');
       }else{
         showModalError('שגיאה: '+(err && err.message ? err.message : String(err)));
       }
