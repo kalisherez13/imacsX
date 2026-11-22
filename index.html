@@ -358,7 +358,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 35</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 36</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -1423,6 +1423,7 @@ window.addEventListener('unhandledrejection', function(e){
         if(!cur) return;
         let s=cur.s;
         if(!/[א-ת]/.test(s)) s=[...s].reverse().join('');   // digits come out mirrored
+        s = s.replace(/[()]/g, c=>c==='('?')':'(');                  // brackets are drawn mirrored in RTL
         out.push({str:s, x:cur.left, y:ln.y, w:cur.right-cur.left});
         cur=null;
       };
@@ -1490,7 +1491,7 @@ window.addEventListener('unhandledrejection', function(e){
           const title = items.filter(i=>i.y>yh+3 && i.y<yh+25 && blockOf(i)===k)
                              .sort((a,b)=>b.x-a.x).map(i=>i.str).join(' ');
           if(!/מטפל:/.test(title)) continue;
-          const tname = title.replace(/^.*?מטפל:\s*/,'').replace(/\s*\(?\s*\d+\s*\(?\s*תקינים.*$/,'').replace(/\s*\(\s*$/,'').replace(/\s+/g,' ').trim();
+          const tname = title.replace(/^.*?מטפל:\s*/,'').replace(/\s*[()]?\s*\d+\s*[()]?\s*תקינים.*$/,'').replace(/\s*[()]\s*$/,'').replace(/\s+/g,' ').trim();
           if(!tname) continue;
           const therapist = canon(tname);
           const hm = title.match(/(\d+)[\s()]*תקינים/);
@@ -1500,7 +1501,7 @@ window.addEventListener('unhandledrejection', function(e){
           const cFreq = hdr['תדירות'];
           const cells = items.filter(i=>i.y<yh-3 && i.y>yLow && blockOf(i)===k);
           // patient column: everything to the right of the "תדירות" column except the marker column
-          const patItems = cells.filter(i=>!/^\*+$/.test(i.str) && (i.x+i.w) > cFreq+10);
+          const patItems = cells.filter(i=>!/^[*$]+$/.test(i.str) && (i.x+i.w) > cFreq+10);
           const lines=[];
           patItems.slice().sort((a,b)=>b.y-a.y).forEach(it=>{
             const ln = lines.find(l=>Math.abs(l.y-it.y)<=2);
@@ -1509,7 +1510,7 @@ window.addEventListener('unhandledrejection', function(e){
           // lines of a wrapped name sit ~7 apart; different patients are >= 12 apart
           const rows=[];
           lines.forEach(ln=>{
-            const text = ln.items.sort((a,b)=>b.x-a.x).map(i=>i.str).join(' ');
+            const text = ln.items.sort((a,b)=>b.x-a.x).map(i=>i.str==='('?')':i.str===')'?'(':i.str).join(' ');
             const last = rows[rows.length-1];
             if(last && (last.lastY - ln.y) <= 10){ last.text += ' '+text; last.ys.push(ln.y); last.lastY=ln.y; }
             else rows.push({text, ys:[ln.y], lastY:ln.y});
@@ -1523,15 +1524,23 @@ window.addEventListener('unhandledrejection', function(e){
           if(!colsMap.has(therapist)) colsMap.set(therapist, new Map());
           const m = colsMap.get(therapist);
           rows.forEach(r=>{
-            const name = r.text.replace(/\s+/g,' ').trim();
-            if(name && !m.has(name)) m.set(name, r.freq);
+            // Debt is printed inside the name cell: "NAME (חוב 2,000 ₪)" — pull it out as the balance.
+            let text = r.text, balance = null;
+            const dm = text.match(/[()\s]*חוב\s*([\d,]+(?:\.\d+)?)[\s₪()]*/);
+            if(dm){
+              balance = parseFloat(dm[1].replace(/,/g,''));
+              if(!isFinite(balance)) balance = null;
+              text = text.replace(dm[0],' ');
+            }
+            const name = text.replace(/\s+/g,' ').replace(/\(\s+/g,'(').replace(/\s+\)/g,')').trim();
+            if(name && !m.has(name)) m.set(name, {rec:r.freq, bal:balance});
           });
         }
       });
     });
     if(!tables) return null;
     const columns = Array.from(colsMap.entries()).map(([therapist,m])=>({
-      therapist, patients:Array.from(m.entries()).map(([name,rec])=>({name, recommended:rec}))
+      therapist, patients:Array.from(m.entries()).map(([name,v])=>({name, recommended:v.rec, balance:v.bal}))
     }));
     return {date, columns, hidden};
   }
@@ -1553,7 +1562,7 @@ window.addEventListener('unhandledrejection', function(e){
     if(day && day.columns && day.columns.length) showMergeChoice(eod.columns, null);
     else applyExtractedColumns(eod.columns, 'merge', null);
     showToast('יובאו '+total+' מטופלים של '+eod.columns.length+' מטפלים'
-      + (eod.hidden? ' ('+eod.hidden+' מטופלים תקינים לא מופיעים בדוח)' : ''));
+      + (eod.hidden? ' ('+eod.hidden+' מטופלים תקינים בלי חוב לא מופיעים בדוח)' : ''));
   }
 
   async function handlePickedPdf(e, inputEl){
@@ -1932,7 +1941,12 @@ window.addEventListener('unhandledrejection', function(e){
         let existing = day.columns.find(col=>(col.therapist||'').trim()===tname && tname!=='');
         if(existing){
           (c.patients||[]).forEach(p=>{
-            if(!existing.patients.some(x=>(x.name||'').trim()===p.name.trim())){
+            const same = existing.patients.find(x=>(x.name||'').trim()===p.name.trim());
+            if(same){
+              // a newer report refreshes the debt and fills a missing recommended frequency
+              if(p.balance!==undefined && p.balance!==null) same.balance = p.balance;
+              if((same.recommended===null || same.recommended===undefined) && p.recommended!==null && p.recommended!==undefined) same.recommended = p.recommended;
+            }else{
               existing.patients.push({id:uid(),name:p.name,freq:null,recommended:recOf(p),pending:null,star:false,clinical:null,note:'',balance:(p.balance===undefined?null:p.balance)});
             }
           });
