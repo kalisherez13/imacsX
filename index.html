@@ -358,7 +358,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 36</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 37</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -1390,7 +1390,7 @@ window.addEventListener('unhandledrejection', function(e){
   // reading text rows we use the POSITIONS of the table headers to find each table's
   // columns. Only the patient name and the "תדירות" column are used.
   async function extractPdfItems(arrayBuffer){
-    const pdf = await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+    const pdf = await pdfjsLib.getDocument({data:arrayBuffer.slice(0)}).promise;
     const pages=[];
     for(let i=1;i<=pdf.numPages;i++){
       const page = await pdf.getPage(i);
@@ -1485,6 +1485,11 @@ window.addEventListener('unhandledrejection', function(e){
             // glyph-level PDFs can glue the neighbouring headers "תדירות"+"ריקול" into one word
             const g = blockLine.find(i=>i.str.startsWith('תדירות') && i.str.length>6);
             if(g) hdr['תדירות'] = (g.x+g.w) - (g.w*6/g.str.length)/2;
+          }
+          if(hdr['תדירות']===undefined){
+            // newer report versions print the header abbreviated: "תד'"
+            const ab = blockLine.find(i=>/^['׳’`]?תד['׳’`]?$/.test(i.str));
+            if(ab) hdr['תדירות'] = ab.x+ab.w/2;
           }
           if(hdr['תדירות']===undefined || hdr['מטופל']===undefined) continue;
           // title: "מטפל: NAME (N תקינים לא מוצגים)"
@@ -1654,7 +1659,7 @@ window.addEventListener('unhandledrejection', function(e){
   // NOTE: this PDF emits ONE GLYPH per text item, so we must rebuild words from
   // character x-positions and treat a wide gap as a word separator.
   async function extractPdfRows(arrayBuffer){
-    const pdf = await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+    const pdf = await pdfjsLib.getDocument({data:arrayBuffer.slice(0)}).promise;
     const rowsOut=[];
     for(let i=1;i<=pdf.numPages;i++){
       const page = await pdf.getPage(i);
