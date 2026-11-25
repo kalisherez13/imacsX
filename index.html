@@ -358,7 +358,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 37</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 38</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -1465,19 +1465,19 @@ window.addEventListener('unhandledrejection', function(e){
         if(items.some(j=>Math.abs(j.y-i.y)<=2 && j.str.includes('ריקול'))) hdrYs.push(i.y);
       });
       hdrYs.sort((a,b)=>b-a);   // top table row first
-      const titleYs = items.filter(i=>i.str.startsWith('מטפל:')).map(i=>i.y);
+      const titleItems = items.filter(i=>i.str.startsWith('מטפל:') || i.str.startsWith('לא בוצעה קליטה'));
       hdrYs.forEach(yh=>{
         const line = items.filter(i=>Math.abs(i.y-yh)<=2);
         const starts = line.filter(i=>i.str==='סימון').map(i=>i.x+i.w+3).sort((a,b)=>a-b);   // right edge of each table, left→right
         if(!starts.length) return;
         const blockOf = it=>{
           const c = it.x + it.w/2;
-          for(let k=0;k<starts.length;k++){ if(c <= starts[k]+3) return k; }
+          for(let k=0;k<starts.length;k++){ if(c <= starts[k]+3) return (c >= starts[k]-250) ? k : -1; }
           return starts.length-1;
         };
-        const below = titleYs.filter(y=>y < yh-3);
-        const yLow = below.length ? Math.max(...below)+4 : -Infinity;
         for(let k=starts.length-1;k>=0;k--){   // right-to-left, like the report reads
+          const below = titleItems.filter(i=>i.y < yh-3 && blockOf(i)===k).map(i=>i.y);
+          const yLow = below.length ? Math.max(...below)+4 : -Infinity;
           const hdr = {};
           const blockLine = line.filter(i=>blockOf(i)===k);
           blockLine.forEach(i=>{ hdr[i.str]=i.x+i.w/2; });
@@ -1496,7 +1496,7 @@ window.addEventListener('unhandledrejection', function(e){
           const title = items.filter(i=>i.y>yh+3 && i.y<yh+25 && blockOf(i)===k)
                              .sort((a,b)=>b.x-a.x).map(i=>i.str).join(' ');
           if(!/מטפל:/.test(title)) continue;
-          const tname = title.replace(/^.*?מטפל:\s*/,'').replace(/\s*[()]?\s*\d+\s*[()]?\s*תקינים.*$/,'').replace(/\s*[()]\s*$/,'').replace(/\s+/g,' ').trim();
+          const tname = title.replace(/^.*?מטפל:\s*/,'').replace(/\s*[()].*$/,'').replace(/\s+/g,' ').trim();
           if(!tname) continue;
           const therapist = canon(tname);
           const hm = title.match(/(\d+)[\s()]*תקינים/);
@@ -1506,7 +1506,9 @@ window.addEventListener('unhandledrejection', function(e){
           const cFreq = hdr['תדירות'];
           const cells = items.filter(i=>i.y<yh-3 && i.y>yLow && blockOf(i)===k);
           // patient column: everything to the right of the "תדירות" column except the marker column
-          const patItems = cells.filter(i=>!/^[*$]+$/.test(i.str) && (i.x+i.w) > cFreq+10);
+          // newer reports add a "קוד" column (1*, 2●, 1■ …) between the marker and the patient name
+          const cCode = hdr['קוד'];
+          const patItems = cells.filter(i=>!/^[*$]+$/.test(i.str) && (i.x+i.w) > cFreq+10 && (cCode===undefined || (i.x+i.w/2) < cCode-6));
           const lines=[];
           patItems.slice().sort((a,b)=>b.y-a.y).forEach(it=>{
             const ln = lines.find(l=>Math.abs(l.y-it.y)<=2);
@@ -1514,6 +1516,25 @@ window.addEventListener('unhandledrejection', function(e){
           });
           // lines of a wrapped name sit ~7 apart; different patients are >= 12 apart
           const rows=[];
+          const cRec = hdr['ריקול'];
+          if(cCode!==undefined && cRec!==undefined){
+            // newer layout: rows are tight and single-line names sit off-centre, so anchor every row on its
+            // "ריקול" cell (always present) and attach each text line to the nearest anchor
+            const anchors=[];
+            cells.filter(i=>Math.abs(i.x+i.w/2-cRec)<=6).forEach(i=>{ if(!anchors.some(a=>Math.abs(a-i.y)<=2)) anchors.push(i.y); });
+            anchors.sort((a,b)=>b-a);
+            const rr = anchors.map(y=>({y, ln:[]}));
+            lines.forEach(ln=>{
+              let best=null, bd=9;
+              rr.forEach(r=>{ const d=Math.abs(r.y-ln.y); if(d<bd){ bd=d; best=r; } });
+              if(best) best.ln.push(ln);
+            });
+            rr.forEach(r=>{
+              const text = r.ln.sort((a,b)=>b.y-a.y).map(ln=>ln.items.sort((a,b)=>b.x-a.x)
+                .map(i=>i.str==='('?')':i.str===')'?'(':i.str).join(' ')).join(' ');
+              if(text.trim()) rows.push({text, ys:[r.y], lastY:r.y});
+            });
+          } else
           lines.forEach(ln=>{
             const text = ln.items.sort((a,b)=>b.x-a.x).map(i=>i.str==='('?')':i.str===')'?'(':i.str).join(' ');
             const last = rows[rows.length-1];
