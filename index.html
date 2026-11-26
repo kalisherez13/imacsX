@@ -358,7 +358,7 @@
 <div class="topbar no-print">
   <div class="brand">
     <span class="tab">Imacs</span>
-    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 39</span></h1>
+    <h1>לו״ז ותדירות יומי <span style="font-size:11px;opacity:.6;font-weight:400;">build 40</span></h1>
   </div>
   <div class="datectrl">
     <button id="prevDay" title="יום קודם">›</button>
@@ -1455,8 +1455,8 @@ window.addEventListener('unhandledrejection', function(e){
         items = items.map(i=>/[\u05D0-\u05EA]/.test(i.str) ? {x:i.x,y:i.y,w:i.w,str:[...i.str].reverse().join('')} : i);
       }
       if(!date){
-        const d = items.find(i=>/^\d{2}\/\d{2}\/\d{4}$/.test(i.str));
-        if(d) date = d.str;
+        const d = items.map(i=>i.str.match(/(\d{2}\/\d{2}\/\d{4})/)).find(Boolean);
+        if(d) date = d[1];
       }
       // header lines of the therapist tables: the ones that contain "ריקול"
       const hdrYs=[];
@@ -1534,13 +1534,10 @@ window.addEventListener('unhandledrejection', function(e){
                 .map(i=>i.str==='('?')':i.str===')'?'(':i.str).join(' ')).join(' ');
               if(!text.trim()) return;
               // keep only the red ("לא תקין") and orange ("בריקול") rows; green (תקין) and white (אין תדירות) are skipped
-              const cStat = hdr['סטטוס'];
-              let keep = true;
-              if(cStat!==undefined){
-                const st = cells.filter(i=>Math.abs(i.y-r.y)<=6 && Math.abs(i.x+i.w/2-cStat)<=30 && Math.abs(i.x+i.w/2-cRec)>6)
-                                .map(i=>i.str).join(' ');
-                keep = /לא\s*תקין|בריקול/.test(st);
-              }
+              // The row colour is encoded in the marker column: red = "**"/"***", orange = "*" or "R";
+              // green rows have no star ("$" alone = paid-attention debt only) and white rows have nothing.
+              const mk = cells.filter(i=>Math.abs(i.y-r.y)<=6 && (i.x+i.w/2) > cCode+6).map(i=>i.str).join(' ');
+              const keep = /[*]|(^|\s)R(\s|$)/.test(mk);
               if(!keep){ skipped++; return; }
               rows.push({text, ys:[r.y], lastY:r.y});
             });
